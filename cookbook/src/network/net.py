@@ -60,15 +60,13 @@ class TCPRequest(object):
             ipv4only=True):
         '''Create a TCP request over IPv4/IPv6.
 
-        @param addr server address, 2-tuple of (host, port). An host of '' or port
-                    0 tells the OS to use the default.
+        @param addr server address, 2-tuple of (host, port).
         @param timeout timeout of socket object. None for blocking, 0.0 for
                        non-blocking, others for timeout in seconds (float)
         @param reconn_times 重连次数
         @param wait_time 每次重连等待时间间隔（秒，浮点数）
         @param increase_time 每次重连后增加的等待时间间隔（秒，浮点数）
         @param ipv4only True for IPv4 only, False for both IPv6/IPv4.
-        @return socket object
         @exception ValueError parameter error
         @exception OSError <code>socket</code> error
 
@@ -142,6 +140,7 @@ class TCPRequest(object):
                     0 tells the OS to use the default.
         @exception OSError <code>socket</code> error
         '''
+        reconn_times = self._reconn_times
         while True:
             try:
                 _eintr_retry(self._sock.connect, addr)
@@ -153,7 +152,6 @@ class TCPRequest(object):
                 # Li Yun <leven.cn@gmail.com>: This should be an issue.
                 if err.errno == errno.ECONNREFUSED or isinstance(err, socket.timeout):
                     # Try to reconnect
-                    reconn_times = self._reconn_times
                     wait_time = self._wait_time
                     if reconn_times > 0:
                         reconn_times -= 1
@@ -174,7 +172,7 @@ class TCPRequest(object):
                     raise
 
 
-class BaseRequestHandler(object):
+class BaseRequestHandler(metaclass=ABCMeta):
     '''Base class for request handler classes.
 
     This class is instantiated for each request to be handled.  The
@@ -190,12 +188,14 @@ class BaseRequestHandler(object):
     can define arbitrary other instance variariables.
     '''
 
-    __meta__ = ABCMeta
+    # 客户端默认为阻塞模式
+    timeout = None
 
     def __init__(self, request, server):
         self.request = request
         self.client_address = self.request.getsockname()
         self.server = server
+        self.request.settimeout(self.timeout)
         self.setup()
         try:
             self.handle()
@@ -210,27 +210,6 @@ class BaseRequestHandler(object):
         pass
 
     def finish(self):
-        pass
-
-
-class TCPRequestHandler(BaseRequestHandler):
-    '''TCP request handler.
-    '''
-
-    # 客户端默认为阻塞模式
-    timeout = None
-
-    # Disable nagle algorithm for this socket, if True.
-    # Use only when wbufsize != 0, to avoid small packets.
-    disable_nagle_algorithm = False
-
-    def setup(self):
-        self.request.settimeout(self.timeout)
-        if self.disable_nagle_algorithm:
-            self.request.setsockopt(socket.IPPROTO_TCP,
-                                       socket.TCP_NODELAY, True)
-
-    def finish(self):
         if self.server.timeout == 0.0:
             self.server.sel.unregister(self.request)
         try:
@@ -242,29 +221,35 @@ class TCPRequestHandler(BaseRequestHandler):
         self.request.close()
 
 
-class TCPServer(object):
-    '''TCP Server (Only supported for IPv4).
+class TCPRequestHandler(BaseRequestHandler):
+    '''TCP request handler.
     '''
 
-    address_family = socket.AF_INET
-    socket_type = socket.SOCK_STREAM
+    # Disable nagle algorithm for this socket, if True.
+    # Use only when wbufsize != 0, to avoid small packets.
+    disable_nagle_algorithm = False
 
-    # limit the number of outstanding connections in the socket's listen
-    # queue. The value must be less than
-    #     cat /proc/sys/net/core/somaxconn
-    # or
-    #     sysctl net.core.somaxconn
-    # You can change the value to N.
-    #      sudo sysctl -w net.core.somaxconn=<N>
-    # or make the change permanently in "/etc/sysctl.conf".
-    # The default value of 'somaxconn' is 128.
-    request_queue_size = 5
+    def setup(self):
+        if self.disable_nagle_algorithm:
+            self.request.setsockopt(socket.IPPROTO_TCP,
+                                       socket.TCP_NODELAY, True)
 
-    def __init__(self, address, request_handler=TCPRequestHandler,
-            timeout=None, ipv4only=True):
-        '''Create an instance of TCP server.
+    def handle(self):
+        pass
 
-        @param address server address, 2-tuple (host, port)
+
+class BaseServer(metaclass=ABCMeta):
+    '''TCP/UDP base server (Only supported for IPv4).
+    '''
+
+    address_family = None
+    socket_type = None
+
+    def __init__(self, address, request_handler, timeout=None, ipv4only=True):
+        '''Create an instance of TCP or UDP server.
+
+        @param address server address, 2-tuple (host, port). An host of '' or port
+                       0 tells the OS to use the default.
         @param request_handler request handler class
         @param timeout timeout of socket object. None for blocking, 0.0 for
                        non-blocking, others for timeout in seconds (float)
@@ -278,16 +263,12 @@ class TCPServer(object):
         # Setup
         self._sock = socket.socket(self.address_family, self.socket_type)
         self._sock.settimeout(self.timeout)
-
-        # Bind
         if __debug__:
             # Re-use binding address for debugging purpose
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._sock.bind(address)
         self.server_address = self._sock.getsockname()
-
-        # Active
-        self._sock.listen(self.request_queue_size)
+        self._listen_socket()
 
         # In non-blocking mode, I/O multiplex used
         if timeout == 0.0:
@@ -373,3 +354,125 @@ class TCPServer(object):
         for t in self._thread_pool:
             t.join()
         self._sock.close()
+
+    def _listen_socket(self):
+        '''Listen a server socket.
+        '''
+        pass
+
+
+class TCPServer(BaseServer):
+    '''TCP Server (Only supported for IPv4).
+    '''
+
+    address_family = socket.AF_INET
+    socket_type = socket.SOCK_STREAM
+
+    # limit the number of outstanding connections in the socket's listen
+    # queue. The value must be less than
+    #     cat /proc/sys/net/core/somaxconn
+    # or
+    #     sysctl net.core.somaxconn
+    # You can change the value to N.
+    #      sudo sysctl -w net.core.somaxconn=<N>
+    # or make the change permanently in "/etc/sysctl.conf".
+    # The default value of 'somaxconn' is 128.
+    _request_queue_size = 5
+
+    def __init__(self, address, request_handler=TCPRequestHandler, timeout=None, ipv4only=True):
+        '''Create an instance of TCP or UDP server.
+
+        @param address server address, 2-tuple (host, port). An host of '' or port
+                       0 tells the OS to use the default.
+        @param request_handler request handler class
+        @param timeout timeout of socket object. None for blocking, 0.0 for
+                       non-blocking, others for timeout in seconds (float)
+        @param ipv4only True for IPv4 only, False for both IPv6/IPv4.
+        @exception OSError <code>socket</code> error
+        '''
+        super(TCPServer, self).__init__(address, request_handler, timeout, ipv4only)
+
+    def _listen_socket(self):
+        '''Override.
+        '''
+        self._sock.listen(self._request_queue_size)
+
+
+class UDPRequest(object):
+    '''A UDP request over IPv4/IPv6.
+    '''
+
+    def __init__(self, ipv4only=True):
+        '''Create a UDP request over IPv4/IPv6.
+
+        @param ipv4only True for IPv4 only, False for both IPv6/IPv4.
+        @exception ValueError parameter error
+        @exception OSError <code>socket</code> error
+
+        @see getsockname()
+        @see getpeername()
+        @see recv_into()
+        '''
+        self._sock = None
+
+        if ipv4only:
+            self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        else:  # both IPv6 and IPv4, prefer to IPv6
+            host, port = addr
+            err = None
+            for res in socket.getaddrinfo(host, port, 0, socket.SOCK_DGRAM):
+                family, socktype, proto, canonname, sockaddr = res
+                self._sock = None
+                try:
+                    self._sock = socket(family, socktype, proto)
+                except OSError as _:
+                    err = _
+
+            if err is not None:
+                raise err
+            else:
+                raise OSError("getaddrinfo returns an empty list")
+
+    def close(self):
+        '''Close the requst.
+        '''
+        if __debug__:
+            print('{} closed'.format(self._sock.getsockname()), file=sys.stderr)
+        self._sock.close()
+
+    def send(self, data, addr):
+        '''Send data to server.
+
+        @param addr server address, 2-tuple of (host, port).
+        @exception OSError <code>socket</code> error
+        '''
+        self._sock.sendto(data, addr)
+
+    def recv(self, nbytes):
+        '''Receive data from server.
+
+        @param nbytes up to <code>nbytes</code> bytes to received
+        @param addr server address, 2-tuple of (host, port).
+        @return a bytes object representing the data received
+        @exception OSError <code>socket</code> error
+
+        For best match with hardware and network realities, the value of
+        <code>nbytes</code> should be a relatively small power of 2, for
+        example, <value>4096</value>.
+        '''
+        data, addr = self._sock.recvfrom(nbytes)
+        return data
+
+
+class UDPRequestHandler(BaseRequestHandler):
+    '''UDP request handler.
+    '''
+    pass
+
+
+class UDPServer(object):
+    '''UDP Server (Only supported for IPv4).
+    '''
+
+    address_family = socket.AF_INET
+    socket_type = socket.SOCK_DGRAM
