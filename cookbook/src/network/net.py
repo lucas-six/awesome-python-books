@@ -248,7 +248,17 @@ class TCPServer(object):
 
     address_family = socket.AF_INET
     socket_type = socket.SOCK_STREAM
-    request_queue_size = 5  # used by <code>listen()</code>
+
+    # limit the number of outstanding connections in the socket's listen
+    # queue. The value must be less than
+    #     cat /proc/sys/net/core/somaxconn
+    # or
+    #     sysctl net.core.somaxconn
+    # You can change the value to N.
+    #      sudo sysctl -w net.core.somaxconn=<N>
+    # or make the change permanently in "/etc/sysctl.conf".
+    # The default value of 'somaxconn' is 128.
+    request_queue_size = 5
 
     def __init__(self, address, request_handler=TCPRequestHandler,
             timeout=None, ipv4only=True):
