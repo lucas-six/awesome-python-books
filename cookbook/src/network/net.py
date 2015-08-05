@@ -176,16 +176,15 @@ class BaseRequestHandler(metaclass=ABCMeta):
     '''Base class for request handler classes.
 
     This class is instantiated for each request to be handled.  The
-    constructor sets the instance variables request, client_address
-    and server, and then calls the handle() method.  To implement a
-    specific service, all you need to do is to derive a class which
-    defines a handle() method.
+    constructor sets the instance variables request, client_address and
+    server, and then calls the handle() method.  To implement a specific
+    service, all you need to do is to derive a class which defines a handle()
+    method.
 
-    The handle() method can find the request as self.request, the
-    client address as self.client_address, and the server (in case it
-    needs access to per-server information) as self.server.  Since a
-    separate instance is created for each request, the handle() method
-    can define arbitrary other instance variariables.
+    The handle() method can find the request as self.request, and the server
+    (in case it needs access to per-server information) as self.server.  Since
+    a separate instance is created for each request, the handle() method can
+    define arbitrary other instance variariables.
     '''
 
     # 客户端默认为阻塞模式
@@ -193,7 +192,6 @@ class BaseRequestHandler(metaclass=ABCMeta):
 
     def __init__(self, request, server):
         self.request = request
-        self.client_address = self.request.getsockname()
         self.server = server
         self.request.settimeout(self.timeout)
         self.setup()
@@ -212,17 +210,13 @@ class BaseRequestHandler(metaclass=ABCMeta):
     def finish(self):
         if self.server.timeout == 0.0:
             self.server.sel.unregister(self.request)
-        try:
-            #explicitly shutdown.  socket.close() merely releases
-            #the socket and waits for GC to perform the actual close.
-            self.request.shutdown(socket.SHUT_WR)
-        except OSError:
-            pass #some platforms may raise ENOTCONN here
-        self.request.close()
 
 
 class TCPRequestHandler(BaseRequestHandler):
     '''TCP request handler.
+
+    @see sendall()
+    @see recv()
     '''
 
     # Disable nagle algorithm for this socket, if True.
@@ -237,16 +231,37 @@ class TCPRequestHandler(BaseRequestHandler):
     def handle(self):
         pass
 
+    def finish(self):
+        super(TCPRequestHandler, self).finish()
+        try:
+            #explicitly shutdown.  socket.close() merely releases
+            #the socket and waits for GC to perform the actual close.
+            self.request.shutdown(socket.SHUT_WR)
+        except OSError:
+            pass #some platforms may raise ENOTCONN here
+        self.request.close()
 
-class BaseServer(metaclass=ABCMeta):
-    '''TCP/UDP base server (Only supported for IPv4).
+
+class TCPServer(object):
+    '''TCP server (Only supported for IPv4).
     '''
 
-    address_family = None
-    socket_type = None
+    address_family = socket.AF_INET
+    socket_type = socket.SOCK_STREAM
 
-    def __init__(self, address, request_handler, timeout=None, ipv4only=True):
-        '''Create an instance of TCP or UDP server.
+    # limit the number of outstanding connections in the socket's listen
+    # queue. The value must be less than
+    #     cat /proc/sys/net/core/somaxconn
+    # or
+    #     sysctl net.core.somaxconn
+    # You can change the value to N.
+    #      sudo sysctl -w net.core.somaxconn=<N>
+    # or make the change permanently in "/etc/sysctl.conf".
+    # The default value of 'somaxconn' is 128.
+    _request_queue_size = 5
+
+    def __init__(self, address, request_handler=TCPRequestHandler, timeout=None, ipv4only=True):
+        '''Create an instance of TCP server.
 
         @param address server address, 2-tuple (host, port). An host of '' or port
                        0 tells the OS to use the default.
@@ -268,7 +283,7 @@ class BaseServer(metaclass=ABCMeta):
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._sock.bind(address)
         self.server_address = self._sock.getsockname()
-        self._listen_socket()
+        self._sock.listen(self._request_queue_size)
 
         # In non-blocking mode, I/O multiplex used
         if timeout == 0.0:
@@ -318,6 +333,7 @@ class BaseServer(metaclass=ABCMeta):
 
         @exception OSError <code>socket</code> error
         '''
+
         # <code>socket.accept()</code> cannot be interrupted by the signal
         # EINTR or <code>KeyboardInterrupt</code> in blocking mode on Windows.
         request, addr = self._sock.accept()
@@ -354,48 +370,6 @@ class BaseServer(metaclass=ABCMeta):
         for t in self._thread_pool:
             t.join()
         self._sock.close()
-
-    def _listen_socket(self):
-        '''Listen a server socket.
-        '''
-        pass
-
-
-class TCPServer(BaseServer):
-    '''TCP Server (Only supported for IPv4).
-    '''
-
-    address_family = socket.AF_INET
-    socket_type = socket.SOCK_STREAM
-
-    # limit the number of outstanding connections in the socket's listen
-    # queue. The value must be less than
-    #     cat /proc/sys/net/core/somaxconn
-    # or
-    #     sysctl net.core.somaxconn
-    # You can change the value to N.
-    #      sudo sysctl -w net.core.somaxconn=<N>
-    # or make the change permanently in "/etc/sysctl.conf".
-    # The default value of 'somaxconn' is 128.
-    _request_queue_size = 5
-
-    def __init__(self, address, request_handler=TCPRequestHandler, timeout=None, ipv4only=True):
-        '''Create an instance of TCP or UDP server.
-
-        @param address server address, 2-tuple (host, port). An host of '' or port
-                       0 tells the OS to use the default.
-        @param request_handler request handler class
-        @param timeout timeout of socket object. None for blocking, 0.0 for
-                       non-blocking, others for timeout in seconds (float)
-        @param ipv4only True for IPv4 only, False for both IPv6/IPv4.
-        @exception OSError <code>socket</code> error
-        '''
-        super(TCPServer, self).__init__(address, request_handler, timeout, ipv4only)
-
-    def _listen_socket(self):
-        '''Override.
-        '''
-        self._sock.listen(self._request_queue_size)
 
 
 class UDPRequest(object):
@@ -476,3 +450,92 @@ class UDPServer(object):
 
     address_family = socket.AF_INET
     socket_type = socket.SOCK_DGRAM
+
+    def __init__(self, address, request_handler, timeout=None, ipv4only=True):
+        '''Create an instance of TCP server.
+
+        @param address server address, 2-tuple (host, port). An host of '' or port
+                       0 tells the OS to use the default.
+        @param request_handler request handler class
+        @param timeout timeout of socket object. None for blocking, 0.0 for
+                       non-blocking, others for timeout in seconds (float)
+        @param ipv4only True for IPv4 only, False for both IPv6/IPv4.
+        @exception OSError <code>socket</code> error
+        '''
+        self.timeout = timeout
+        self._RequestHandler = request_handler
+
+        # Setup
+        self._sock = socket.socket(self.address_family, self.socket_type)
+        self._sock.settimeout(self.timeout)
+        if __debug__:
+            # Re-use binding address for debugging purpose
+            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._sock.bind(address)
+        self.server_address = self._sock.getsockname()
+
+        # In non-blocking mode, I/O multiplex used
+        if timeout == 0.0:
+            # on Windows: select()
+            # on Linux 2.5.44+: epoll()
+            # on most UNIX system: poll()
+            # on BSD (Including OS X): kqueue()
+            #
+            # @see select
+            self.sel = selectors.DefaultSelector()
+            self.sel.register(self._sock, selectors.EVENT_READ, self._handle_requests)
+
+    def run(self, timeout=None):
+        '''Run the server.
+
+        @param timeout timeout for I/O multiplex
+        @exception OSError <code>socket</code> error
+        '''
+        # Note: put the <code>while</code> loop inside the <code>except</code>
+        # clause of a <code>try-except</code> statement and monitor for
+        # <code>EOFError</code> or <code>KeyboardInterrupt</code> exceptions
+        # so that you can close the server's socket in the
+        # <code>except</code> or <code>finally</code> clauses.
+        try:
+            while True:
+                if __debug__:
+                    print('Waiting for request on port {0}...'
+                        .format(self.server_address[1]), file=sys.stderr)
+
+                if self.timeout == 0.0:
+                    events = self.sel.select()
+                    for key, mask in events:
+                        callback = key.data
+                        callback(key.fileobj, mask)
+
+                # Blocking mode or timeout mode
+                else:
+                    self._handle_requests()
+
+                if __debug__:
+                    print('\n', file=sys.stderr)
+        finally:
+            self.close()
+
+    def _handle_requests(self, server_sock=None, mask=None):
+        '''Handle requests.
+
+        @exception OSError <code>socket</code> error
+        '''
+        if self.timeout == 0.0:
+            self.sel.register(self._sock, selectors.EVENT_READ, self._handle_one_request)
+        else:
+            self._handle_one_request()
+
+    def _handle_one_request(self, request=None, mask=None):
+        '''Handle single one request.
+
+        @param request request connection (socket object) from client
+        @exception OSError <code>socket</code> error
+        '''
+        self._RequestHandler(self._sock, self)
+
+    def close(self):
+        '''Close the server.
+        '''
+        self._sock.close()

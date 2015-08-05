@@ -27,13 +27,14 @@ import net
 
 class MyTCPRequestHandler(net.TCPRequestHandler):
     def handle(self):
+        client_address = self.request.getsockname()
         try:
             data = self.request.recv(1024)
-            print('Data from {0}: {1}'.format(self.client_address, data))
+            print('Data from {0}: {1}'.format(client_address, data))
 
             data = b'response'
             self.request.sendall(data)
-            print('Data to {0}: {1}'.format(self.client_address, data))
+            print('Data to {0}: {1}'.format(client_address, data))
         except OSError as err:
             print('Data R/W error {}:'.format(err), file=sys.stderr)
             raise
