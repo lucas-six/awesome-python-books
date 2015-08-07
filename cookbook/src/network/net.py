@@ -210,8 +210,7 @@ class BaseRequestHandler(metaclass=ABCMeta):
         pass
 
     def finish(self):
-        if self.server.timeout == 0.0:
-            self.server.sel.unregister(self.request)
+        pass
 
 
 class TCPRequestHandler(BaseRequestHandler):
@@ -234,7 +233,8 @@ class TCPRequestHandler(BaseRequestHandler):
         pass
 
     def finish(self):
-        super(TCPRequestHandler, self).finish()
+        if self.server.timeout == 0.0:
+            self.server.sel.unregister(self.request)
         try:
             #explicitly shutdown.  socket.close() merely releases
             #the socket and waits for GC to perform the actual close.
@@ -453,42 +453,25 @@ class UDPServer(object):
     address_family = socket.AF_INET
     socket_type = socket.SOCK_DGRAM
 
-    def __init__(self, address, request_handler, timeout=None, ipv4only=True):
+    def __init__(self, address, request_handler, ipv4only=True):
         '''Create an instance of TCP server.
 
         @param address server address, 2-tuple (host, port). An host of '' or port
                        0 tells the OS to use the default.
         @param request_handler request handler class
-        @param timeout None for blocking mode, 0.0 for non-blocking mode
         @param ipv4only True for IPv4 only, False for both IPv6/IPv4
-        @exception ValueError parameter error
         @exception OSError <code>socket</code> error
         '''
-        if timeout is not None and timeout != 0.0:
-            raise ValueError('UDP server NOT support timeout mode')
 
-        self.timeout = timeout
         self._RequestHandler = request_handler
 
         # Setup
         self._sock = socket.socket(self.address_family, self.socket_type)
-        self._sock.settimeout(timeout)
         if __debug__:
             # Re-use binding address for debugging purpose
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._sock.bind(address)
         self.server_address = self._sock.getsockname()
-
-        # In non-blocking mode, I/O multiplex used
-        if timeout == 0.0:
-            # on Windows: select()
-            # on Linux 2.5.44+: epoll()
-            # on most UNIX system: poll()
-            # on BSD (Including OS X): kqueue()
-            #
-            # @see select
-            self.sel = selectors.DefaultSelector()
-            self.sel.register(self._sock, selectors.EVENT_READ, self._handle_requests)
 
     def run(self, timeout=None):
         '''Run the server.
@@ -507,35 +490,16 @@ class UDPServer(object):
                     print('Waiting for request on port {0}...'
                         .format(self.server_address[1]), file=sys.stderr)
 
-                if self.timeout == 0.0:
-                    events = self.sel.select(timeout)
-                    for key, mask in events:
-                        callback = key.data
-                        callback(key.fileobj, mask)
-
-                # Blocking mode
-                else:
-                    self._handle_requests()
+                self._handle_one_request()
 
                 if __debug__:
                     print('\n', file=sys.stderr)
         finally:
             self.close()
 
-    def _handle_requests(self, server_sock=None, mask=None):
-        '''Handle requests.
-
-        @exception OSError <code>socket</code> error
-        '''
-        if self.timeout == 0.0:
-            self.sel.register(self._sock, selectors.EVENT_READ, self._handle_one_request)
-        else:
-            self._handle_one_request()
-
-    def _handle_one_request(self, request=None, mask=None):
+    def _handle_one_request(self):
         '''Handle single one request.
 
-        @param request request connection (socket object) from client
         @exception OSError <code>socket</code> error
         '''
         self._RequestHandler(self._sock, self)
