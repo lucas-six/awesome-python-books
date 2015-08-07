@@ -21,7 +21,9 @@ Including:
 
 - TCP request (blocking/timeout mode, IPv4/IPv6)
 - TCP server (blocking/timeout/non-blocking mode, IPv4, multi-threads)
-- TCP Handler
+- TCP request handler
+- UDP request (IPv4)
+- UDP server
 
 @since Python 3.4
 '''
@@ -314,7 +316,7 @@ class TCPServer(object):
                         .format(self.server_address[1]), file=sys.stderr)
 
                 if self.timeout == 0.0:
-                    events = self.sel.select()
+                    events = self.sel.select(timeout)
                     for key, mask in events:
                         callback = key.data
                         callback(key.fileobj, mask)
@@ -457,17 +459,20 @@ class UDPServer(object):
         @param address server address, 2-tuple (host, port). An host of '' or port
                        0 tells the OS to use the default.
         @param request_handler request handler class
-        @param timeout timeout of socket object. None for blocking, 0.0 for
-                       non-blocking, others for timeout in seconds (float)
-        @param ipv4only True for IPv4 only, False for both IPv6/IPv4.
+        @param timeout None for blocking mode, 0.0 for non-blocking mode
+        @param ipv4only True for IPv4 only, False for both IPv6/IPv4
+        @exception ValueError parameter error
         @exception OSError <code>socket</code> error
         '''
+        if timeout is not None and timeout != 0.0:
+            raise ValueError('UDP server NOT support timeout mode')
+
         self.timeout = timeout
         self._RequestHandler = request_handler
 
         # Setup
         self._sock = socket.socket(self.address_family, self.socket_type)
-        self._sock.settimeout(self.timeout)
+        self._sock.settimeout(timeout)
         if __debug__:
             # Re-use binding address for debugging purpose
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -503,12 +508,12 @@ class UDPServer(object):
                         .format(self.server_address[1]), file=sys.stderr)
 
                 if self.timeout == 0.0:
-                    events = self.sel.select()
+                    events = self.sel.select(timeout)
                     for key, mask in events:
                         callback = key.data
                         callback(key.fileobj, mask)
 
-                # Blocking mode or timeout mode
+                # Blocking mode
                 else:
                     self._handle_requests()
 

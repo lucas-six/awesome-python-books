@@ -15,7 +15,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-'''Test UDP server over IPv4 in blocking mode.
+'''Test UDP server over IPv4 in timeout mode.
 
 '''
 
@@ -41,7 +41,8 @@ class MyUDPRequestHandler(net.UDPRequestHandler):
 
 if __name__ == '__main__':
     try:
-        with closing(net.UDPServer(('', 8888), request_handler=MyUDPRequestHandler)) as srv:
+        with closing(net.UDPServer(('', 8888), \
+                request_handler=MyUDPRequestHandler, timeout=5.0)) as srv:
             srv.run()
     except (ValueError, OSError) as err:
         print('UDP server failed: {}'.format(err), file=sys.stderr)
