@@ -1,0 +1,30 @@
+*.log
+
+# C
+*.[oa]
+
+# Python
+*.py[co]
+
+# Windows
+*.exe
+
+# Python building files
+Makefile*
+pyconfig.h
+config.status
+Misc/python-config.sh
+Misc/python.pc
+Modules/Setup
+Modules/Setup.config
+Modules/Setup.local
+Modules/config.c
+Modules/ld_so_aix
+Modules/_testembed
+Parser/pgen
+pybuilddir.txt
+python-config
+python-config.py
+python.exe-gdb.py
+build/
+
