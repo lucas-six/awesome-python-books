@@ -12,7 +12,7 @@ Python 3.4.3+
 ## Hello World
 
 ```python
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 print('Hello World')
 ```

@@ -15,7 +15,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-'''Test TCP server over IPv4 in timeout mode.
+'''Test UDP server over IPv4 in blocking mode.
 
 '''
 
@@ -25,16 +25,15 @@ from contextlib import closing
 import net
 
 
-class MyTCPRequestHandler(net.TCPRequestHandler):
+class MyUDPRequestHandler(net.UDPRequestHandler):
     def handle(self):
-        client_address = self.request.getsockname()
         try:
-            data = self.request.recv(1024)
-            print('Data from {0}: {1}'.format(client_address, data))
+            data, addr = self.request.recvfrom(1024)
+            print('Data from {0}: {1}'.format(addr, data))
 
             data = b'response'
-            self.request.sendall(data)
-            print('Data to {0}: {1}'.format(client_address, data))
+            self.request.sendto(data, addr)
+            print('Data to {0}: {1}'.format(addr, data))
         except OSError as err:
             print('Data R/W error {}:'.format(err), file=sys.stderr)
             raise
@@ -42,8 +41,7 @@ class MyTCPRequestHandler(net.TCPRequestHandler):
 
 if __name__ == '__main__':
     try:
-        with closing(net.TCPServer(('', 8888), \
-                request_handler=MyTCPRequestHandler, timeout=5.0)) as srv:
+        with closing(net.UDPServer(('', 8888), request_handler=MyUDPRequestHandler)) as srv:
             srv.run()
-    except OSError as err:
-        print('TCP server failed: {}'.format(err), file=sys.stderr)
+    except (ValueError, OSError) as err:
+        print('UDP server failed: {}'.format(err), file=sys.stderr)

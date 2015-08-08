@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (c) 2014-2015 Li Yun <leven.cn@gmail.com>
 # All Rights Reserved.

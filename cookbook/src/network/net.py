@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (c) 2014-2015 Li Yun <leven.cn@gmail.com>
 # All Rights Reserved.
@@ -21,7 +21,9 @@ Including:
 
 - TCP request (blocking/timeout mode, IPv4/IPv6)
 - TCP server (blocking/timeout/non-blocking mode, IPv4, multi-threads)
-- TCP Handler
+- TCP request handler
+- UDP request (IPv4)
+- UDP server
 
 @since Python 3.4
 '''
@@ -60,15 +62,13 @@ class TCPRequest(object):
             ipv4only=True):
         '''Create a TCP request over IPv4/IPv6.
 
-        @param addr server address, 2-tuple of (host, port). An host of '' or port
-                    0 tells the OS to use the default.
+        @param addr server address, 2-tuple of (host, port).
         @param timeout timeout of socket object. None for blocking, 0.0 for
                        non-blocking, others for timeout in seconds (float)
         @param reconn_times 重连次数
         @param wait_time 每次重连等待时间间隔（秒，浮点数）
         @param increase_time 每次重连后增加的等待时间间隔（秒，浮点数）
         @param ipv4only True for IPv4 only, False for both IPv6/IPv4.
-        @return socket object
         @exception ValueError parameter error
         @exception OSError <code>socket</code> error
 
@@ -142,6 +142,7 @@ class TCPRequest(object):
                     0 tells the OS to use the default.
         @exception OSError <code>socket</code> error
         '''
+        reconn_times = self._reconn_times
         while True:
             try:
                 _eintr_retry(self._sock.connect, addr)
@@ -153,7 +154,6 @@ class TCPRequest(object):
                 # Li Yun <leven.cn@gmail.com>: This should be an issue.
                 if err.errno == errno.ECONNREFUSED or isinstance(err, socket.timeout):
                     # Try to reconnect
-                    reconn_times = self._reconn_times
                     wait_time = self._wait_time
                     if reconn_times > 0:
                         reconn_times -= 1
@@ -174,28 +174,28 @@ class TCPRequest(object):
                     raise
 
 
-class BaseRequestHandler(object):
+class BaseRequestHandler(metaclass=ABCMeta):
     '''Base class for request handler classes.
 
     This class is instantiated for each request to be handled.  The
-    constructor sets the instance variables request, client_address
-    and server, and then calls the handle() method.  To implement a
-    specific service, all you need to do is to derive a class which
-    defines a handle() method.
+    constructor sets the instance variables request, client_address and
+    server, and then calls the handle() method.  To implement a specific
+    service, all you need to do is to derive a class which defines a handle()
+    method.
 
-    The handle() method can find the request as self.request, the
-    client address as self.client_address, and the server (in case it
-    needs access to per-server information) as self.server.  Since a
-    separate instance is created for each request, the handle() method
-    can define arbitrary other instance variariables.
+    The handle() method can find the request as self.request, and the server
+    (in case it needs access to per-server information) as self.server.  Since
+    a separate instance is created for each request, the handle() method can
+    define arbitrary other instance variariables.
     '''
 
-    __meta__ = ABCMeta
+    # 客户端默认为阻塞模式
+    timeout = None
 
     def __init__(self, request, server):
         self.request = request
-        self.client_address = self.request.getsockname()
         self.server = server
+        self.request.settimeout(self.timeout)
         self.setup()
         try:
             self.handle()
@@ -215,20 +215,22 @@ class BaseRequestHandler(object):
 
 class TCPRequestHandler(BaseRequestHandler):
     '''TCP request handler.
-    '''
 
-    # 客户端默认为阻塞模式
-    timeout = None
+    @see sendall()
+    @see recv()
+    '''
 
     # Disable nagle algorithm for this socket, if True.
     # Use only when wbufsize != 0, to avoid small packets.
     disable_nagle_algorithm = False
 
     def setup(self):
-        self.request.settimeout(self.timeout)
         if self.disable_nagle_algorithm:
             self.request.setsockopt(socket.IPPROTO_TCP,
                                        socket.TCP_NODELAY, True)
+
+    def handle(self):
+        pass
 
     def finish(self):
         if self.server.timeout == 0.0:
@@ -243,18 +245,28 @@ class TCPRequestHandler(BaseRequestHandler):
 
 
 class TCPServer(object):
-    '''TCP Server (Only supported for IPv4).
+    '''TCP server (Only supported for IPv4).
     '''
 
     address_family = socket.AF_INET
     socket_type = socket.SOCK_STREAM
-    request_queue_size = 5  # used by <code>listen()</code>
 
-    def __init__(self, address, request_handler=TCPRequestHandler,
-            timeout=None, ipv4only=True):
+    # limit the number of outstanding connections in the socket's listen
+    # queue. The value must be less than
+    #     cat /proc/sys/net/core/somaxconn
+    # or
+    #     sysctl net.core.somaxconn
+    # You can change the value to N.
+    #      sudo sysctl -w net.core.somaxconn=<N>
+    # or make the change permanently in "/etc/sysctl.conf".
+    # The default value of 'somaxconn' is 128.
+    _request_queue_size = 5
+
+    def __init__(self, address, request_handler=TCPRequestHandler, timeout=None, ipv4only=True):
         '''Create an instance of TCP server.
 
-        @param address server address, 2-tuple (host, port)
+        @param address server address, 2-tuple (host, port). An host of '' or port
+                       0 tells the OS to use the default.
         @param request_handler request handler class
         @param timeout timeout of socket object. None for blocking, 0.0 for
                        non-blocking, others for timeout in seconds (float)
@@ -268,16 +280,12 @@ class TCPServer(object):
         # Setup
         self._sock = socket.socket(self.address_family, self.socket_type)
         self._sock.settimeout(self.timeout)
-
-        # Bind
         if __debug__:
             # Re-use binding address for debugging purpose
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._sock.bind(address)
         self.server_address = self._sock.getsockname()
-
-        # Active
-        self._sock.listen(self.request_queue_size)
+        self._sock.listen(self._request_queue_size)
 
         # In non-blocking mode, I/O multiplex used
         if timeout == 0.0:
@@ -308,7 +316,7 @@ class TCPServer(object):
                         .format(self.server_address[1]), file=sys.stderr)
 
                 if self.timeout == 0.0:
-                    events = self.sel.select()
+                    events = self.sel.select(timeout)
                     for key, mask in events:
                         callback = key.data
                         callback(key.fileobj, mask)
@@ -327,6 +335,7 @@ class TCPServer(object):
 
         @exception OSError <code>socket</code> error
         '''
+
         # <code>socket.accept()</code> cannot be interrupted by the signal
         # EINTR or <code>KeyboardInterrupt</code> in blocking mode on Windows.
         request, addr = self._sock.accept()
@@ -362,4 +371,140 @@ class TCPServer(object):
         '''
         for t in self._thread_pool:
             t.join()
+        self._sock.close()
+
+
+class UDPRequest(object):
+    '''A UDP request over IPv4/IPv6.
+    '''
+
+    def __init__(self, ipv4only=True):
+        '''Create a UDP request over IPv4/IPv6.
+
+        @param ipv4only True for IPv4 only, False for both IPv6/IPv4.
+        @exception ValueError parameter error
+        @exception OSError <code>socket</code> error
+
+        @see getsockname()
+        @see getpeername()
+        @see recv_into()
+        '''
+        self._sock = None
+
+        if ipv4only:
+            self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        else:  # both IPv6 and IPv4, prefer to IPv6
+            host, port = addr
+            err = None
+            for res in socket.getaddrinfo(host, port, 0, socket.SOCK_DGRAM):
+                family, socktype, proto, canonname, sockaddr = res
+                self._sock = None
+                try:
+                    self._sock = socket(family, socktype, proto)
+                except OSError as _:
+                    err = _
+
+            if err is not None:
+                raise err
+            else:
+                raise OSError("getaddrinfo returns an empty list")
+
+    def close(self):
+        '''Close the requst.
+        '''
+        if __debug__:
+            print('{} closed'.format(self._sock.getsockname()), file=sys.stderr)
+        self._sock.close()
+
+    def send(self, data, addr):
+        '''Send data to server.
+
+        @param addr server address, 2-tuple of (host, port).
+        @exception OSError <code>socket</code> error
+        '''
+        self._sock.sendto(data, addr)
+
+    def recv(self, nbytes):
+        '''Receive data from server.
+
+        @param nbytes up to <code>nbytes</code> bytes to received
+        @param addr server address, 2-tuple of (host, port).
+        @return a bytes object representing the data received
+        @exception OSError <code>socket</code> error
+
+        For best match with hardware and network realities, the value of
+        <code>nbytes</code> should be a relatively small power of 2, for
+        example, <value>4096</value>.
+        '''
+        data, addr = self._sock.recvfrom(nbytes)
+        return data
+
+
+class UDPRequestHandler(BaseRequestHandler):
+    '''UDP request handler.
+    '''
+    pass
+
+
+class UDPServer(object):
+    '''UDP Server (Only supported for IPv4).
+    '''
+
+    address_family = socket.AF_INET
+    socket_type = socket.SOCK_DGRAM
+
+    def __init__(self, address, request_handler, ipv4only=True):
+        '''Create an instance of TCP server.
+
+        @param address server address, 2-tuple (host, port). An host of '' or port
+                       0 tells the OS to use the default.
+        @param request_handler request handler class
+        @param ipv4only True for IPv4 only, False for both IPv6/IPv4
+        @exception OSError <code>socket</code> error
+        '''
+
+        self._RequestHandler = request_handler
+
+        # Setup
+        self._sock = socket.socket(self.address_family, self.socket_type)
+        if __debug__:
+            # Re-use binding address for debugging purpose
+            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._sock.bind(address)
+        self.server_address = self._sock.getsockname()
+
+    def run(self, timeout=None):
+        '''Run the server.
+
+        @param timeout timeout for I/O multiplex
+        @exception OSError <code>socket</code> error
+        '''
+        # Note: put the <code>while</code> loop inside the <code>except</code>
+        # clause of a <code>try-except</code> statement and monitor for
+        # <code>EOFError</code> or <code>KeyboardInterrupt</code> exceptions
+        # so that you can close the server's socket in the
+        # <code>except</code> or <code>finally</code> clauses.
+        try:
+            while True:
+                if __debug__:
+                    print('Waiting for request on port {0}...'
+                        .format(self.server_address[1]), file=sys.stderr)
+
+                self._handle_one_request()
+
+                if __debug__:
+                    print('\n', file=sys.stderr)
+        finally:
+            self.close()
+
+    def _handle_one_request(self):
+        '''Handle single one request.
+
+        @exception OSError <code>socket</code> error
+        '''
+        self._RequestHandler(self._sock, self)
+
+    def close(self):
+        '''Close the server.
+        '''
         self._sock.close()
