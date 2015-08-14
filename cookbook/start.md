@@ -1,7 +1,12 @@
 # 入门
 Python 3.4.3+
 
-参考 [Python 3 官方文档](https://docs.python.org/3/) ([中文翻译版](http://python.usyiyi.cn/python_343/tutorial/))
+## 参考资料
+
+- Why I Love Python (2001)
+- [Think Python: How to Think Like a Computer Scientist](http://www.greenteapress.com/thinkpython/html/index.html) (适合无编程经验者)
+- [Python 3 官方文档](https://docs.python.org/3/) ([中文翻译](http://python.usyiyi.cn/python_343/tutorial/))
+- Python Cookbook, 3rd Edition (2013) [中文版](http://python3-cookbook.readthedocs.org/zh_CN/latest/)
 
 ## 代码编辑器
 
