@@ -213,11 +213,9 @@ def context_manager():
     from contextlib import suppress
     import os
     with suppress(FileNotFoundError):
-        os.remove('not-exists')
-                
-            
-    
-            
+        os.remove('not-exists')    
+
+
     # contextlib.redirect_stdout(new_file)
     #
     # **NOTE**: This context manager is *reusable* but *not reentrant*.
@@ -228,7 +226,7 @@ def context_manager():
     with redirect_stdout(f):
         help(io)
     s = f.getvalue()
-    
+
     
 def re_pattern():
     '''Regular Expression (RE) pattern.
