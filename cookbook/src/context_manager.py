@@ -22,6 +22,7 @@
 - 自定义上下文管理器
 - 上下文管理器注解示例
 - 自定义上下文管理器注解
+- 退出堆栈式上下文管理器示例
 
 <code>with</code>语句支持运行时上下文。
 
@@ -102,3 +103,36 @@ def mycontextfunc():
 
 mycontextfunc()
 assert stack == ['Enter', 'Do', 'Exit']
+
+
+# 退出堆栈式上下文管理器示例
+#
+# Replace `try-finally`:
+#
+#     cleanup_needed = True
+#     def do():
+#         return False
+#     def cleanup():
+#         pass
+#     try:
+#         result = do()
+#         if result:
+#             cleanup_needed = False
+#     finally:
+#         if cleanup_needed:
+#             cleanup()
+#
+# @since Python 3.3
+from contextlib import ExitStack
+
+def do():
+    return False
+
+def cleanup():
+    pass
+
+with ExitStack() as stack:
+    stack.callback(cleanup)
+    result = do()
+    if result:
+        stack.pop_all()

@@ -216,34 +216,7 @@ def context_manager():
         os.remove('not-exists')
                 
             
-    # contextlib.ExitStack
-    #
-    # Replace `try-finally`:
-    #
-    #     cleanup_needed = True
-    #     def do():
-    #         return False
-    #     def cleanup():
-    #         pass
-    #     try:
-    #         result = do()
-    #         if result:
-    #             cleanup_needed = False
-    #     finally:
-    #         if cleanup_needed:
-    #             cleanup()
-    #
-    # @since Python 3.3
-    from contextlib import ExitStack
-    def do():
-        return False
-    def cleanup():
-        pass
-    with ExitStack() as stack:
-        stack.callback(cleanup)
-        result = do()
-        if result:
-            stack.pop_all()
+    
             
     # contextlib.redirect_stdout(new_file)
     #
