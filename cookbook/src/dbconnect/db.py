@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2014-2015 xjzhou <xiangjiang3602008@163.com>
+# Copyright (c) 2015 xjzhou <xiangjiang3602008@163.com>
 # All Rights Reserved.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
