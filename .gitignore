@@ -26,5 +26,7 @@ pybuilddir.txt
 python-config
 python-config.py
 python.exe-gdb.py
+python
+python-gdb.py
 build/
 
