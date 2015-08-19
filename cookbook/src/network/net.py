@@ -246,10 +246,43 @@ class TCPRequestHandler(BaseRequestHandler):
 
 class TCPServer(object):
     '''TCP server (Only supported for IPv4).
-    '''
+   '''
 
     address_family = socket.AF_INET
     socket_type = socket.SOCK_STREAM
+
+    # 启动TCP KeepAlive
+    enable_keep_alive = False
+
+    # 空闲时，启动探测间隔时间（秒）
+    # Linux默认值为7200
+    #     sysctl net.ipv4.tcp_keepalive_time
+    # or
+    #     cat /proc/sys/net/ipv4/tcp_keepalive_time
+    # You can change the value to N.
+    #      sudo sysctl -w net.ipv4.tcp_keepalive_time=<N>
+    # or make the change permanently in "/etc/sysctl.conf".
+    keep_alive_time = 1800
+
+    # 网络不可达时，重发探测间隔时间（秒）
+    # Linux默认值为75
+    #     sysctl net.ipv4.tcp_keepalive_intvl
+    # or
+    #     cat /proc/sys/net/ipv4/tcp_keepalive_intvl
+    # You can change the value to N.
+    #      sudo sysctl -w net.ipv4.tcp_keepalive_intvl=<N>
+    # or make the change permanently in "/etc/sysctl.conf".
+    keep_alive_intvl = 1
+
+    # 网络不可达时，重发探测次数
+    # Linux默认值为9
+    #     sysctl net.ipv4.tcp_keepalive_probes
+    # or
+    #     cat /proc/sys/net/ipv4/tcp_keepalive_probes
+    # You can change the value to N.
+    #      sudo sysctl -w net.ipv4.tcp_keepalive_probes=<N>
+    # or make the change permanently in "/etc/sysctl.conf".
+    keep_alive_probes = 9
 
     # limit the number of outstanding connections in the socket's listen
     # queue. The value must be less than
@@ -280,6 +313,11 @@ class TCPServer(object):
         # Setup
         self._sock = socket.socket(self.address_family, self.socket_type)
         self._sock.settimeout(self.timeout)
+        if self.enable_keep_alive:
+            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, self.keep_alive_time)
+            self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, self.keep_alive_intvl)
+            self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, self.keep_alive_probes)
         if __debug__:
             # Re-use binding address for debugging purpose
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -508,3 +546,135 @@ class UDPServer(object):
         '''Close the server.
         '''
         self._sock.close()
+
+
+class HTTPServer(TCPServer):
+    '''HTTP/1.1 server (Only supported for IPv4).
+    '''
+
+    def __init__(self, address, request_handler=TCPRequestHandler, timeout=None, ipv4only=True):
+        '''Create an instance of TCP server.
+
+    @param address server address, 2-tuple (host, port). An host of '' or port
+                   0 tells the OS to use the default.
+    @param request_handler request handler class
+    @param timeout timeout of socket object. None for blocking, 0.0 for
+                   non-blocking, others for timeout in seconds (float)
+    @param ipv4only True for IPv4 only, False for both IPv6/IPv4.
+    @exception OSError <code>socket</code> error
+    '''
+        super(HTTPServer, self).__init__(address, request_handler, timeout, ipv4only)
+        self.fqdn = self._sock.getfqdn(self.server_address[0])
+
+
+class HTTPRequestHandler(TCPRequestHandler):
+    '''HTTP request handler.
+    '''
+    
+    http_version = 'HTTP/1.1'
+
+    # 服务器可处理的最大实体数据大小
+    max_body_len = 65537
+
+    # 服务器可处理的URL最长长度
+    max_url_len = 10240
+
+    # Table mapping response codes to messages; entries have the
+    # form {code: (shortmessage, longmessage)}.
+    # See RFC 2616 and 6585.
+    responses = {
+        100: ('Continue', 'Request received, please continue'),
+        101: ('Switching Protocols',
+              'Switching to new protocol; obey Upgrade header'),
+
+        200: ('OK', 'Request fulfilled, document follows'),
+        201: ('Created', 'Document created, URL follows'),
+        202: ('Accepted',
+              'Request accepted, processing continues off-line'),
+        203: ('Non-Authoritative Information', 'Request fulfilled from cache'),
+        204: ('No Content', 'Request fulfilled, nothing follows'),
+        205: ('Reset Content', 'Clear input form for further input.'),
+        206: ('Partial Content', 'Partial content follows.'),
+
+        300: ('Multiple Choices',
+              'Object has several resources -- see URI list'),
+        301: ('Moved Permanently', 'Object moved permanently -- see URI list'),
+        302: ('Found', 'Object moved temporarily -- see URI list'),
+        303: ('See Other', 'Object moved -- see Method and URL list'),
+        304: ('Not Modified',
+              'Document has not changed since given time'),
+        305: ('Use Proxy',
+              'You must use proxy specified in Location to access this '
+              'resource.'),
+        307: ('Temporary Redirect',
+              'Object moved temporarily -- see URI list'),
+
+        400: ('Bad Request',
+              'Bad request syntax or unsupported method'),
+        401: ('Unauthorized',
+              'No permission -- see authorization schemes'),
+        402: ('Payment Required',
+              'No payment -- see charging schemes'),
+        403: ('Forbidden',
+              'Request forbidden -- authorization will not help'),
+        404: ('Not Found', 'Nothing matches the given URI'),
+        405: ('Method Not Allowed',
+              'Specified method is invalid for this resource.'),
+        406: ('Not Acceptable', 'URI not available in preferred format.'),
+        407: ('Proxy Authentication Required', 'You must authenticate with '
+              'this proxy before proceeding.'),
+        408: ('Request Timeout', 'Request timed out; try again later.'),
+        409: ('Conflict', 'Request conflict.'),
+        410: ('Gone',
+              'URI no longer exists and has been permanently removed.'),
+        411: ('Length Required', 'Client must specify Content-Length.'),
+        412: ('Precondition Failed', 'Precondition in headers is false.'),
+        413: ('Request Entity Too Large', 'Entity is too large.'),
+        414: ('Request-URI Too Long', 'URI is too long.'),
+        415: ('Unsupported Media Type', 'Entity body in unsupported format.'),
+        416: ('Requested Range Not Satisfiable',
+              'Cannot satisfy request range.'),
+        417: ('Expectation Failed',
+              'Expect condition could not be satisfied.'),
+        428: ('Precondition Required',
+              'The origin server requires the request to be conditional.'),
+        429: ('Too Many Requests', 'The user has sent too many requests '
+              'in a given amount of time ("rate limiting").'),
+        431: ('Request Header Fields Too Large', 'The server is unwilling to '
+              'process the request because its header fields are too large.'),
+
+        500: ('Internal Server Error', 'Server got itself in trouble'),
+        501: ('Not Implemented',
+              'Server does not support this operation'),
+        502: ('Bad Gateway', 'Invalid responses from another server/proxy.'),
+        503: ('Service Unavailable',
+              'The server cannot process the request due to a high load'),
+        504: ('Gateway Timeout',
+              'The gateway server did not receive a timely response'),
+        505: ('HTTP Version Not Supported', 'Cannot fulfill request.'),
+        511: ('Network Authentication Required',
+              'The client needs to authenticate to gain network access.'),
+        }
+
+    def handle(self):
+        client_address = self.request.getsockname()
+        try:
+            data = self.request.recv(max_body_len)
+            if len(data) > max_body_len - 1:
+                self.request_line = ''
+                self.command = ''
+                self._send_error(413)
+                pass # 413
+            if __debug__:
+                print('HTTP data from {0}: {1}'.format(client_address, data), file=sys.stderr)
+
+            data = b'response'
+            self.request.sendall(data)
+            print('Data to {0}: {1}'.format(client_address, data))
+        except OSError as err:
+            print('Data R/W error {}:'.format(err), file=sys.stderr)
+            raise
+
+    def _send_error(code):
+        if __debug__:
+            print('code={}, message="{}"'.format(code, responses[code][1]))
