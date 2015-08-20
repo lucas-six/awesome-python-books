@@ -52,13 +52,21 @@ def cpu_cores():
     return physical_cores, logical_cores
 
 
+def install_or_update_pip_pkgs():
+    '''Install or update python extension packages with pip.
+
+    $ sudo pip3 install --upgrade <python-pkg ...>
+    '''
+    subprocess.check_call('sudo pip3 install --upgrade pip pep8', shell=True)
+
+
 if platform.system() != 'Linux':
     sys.exit('Only support Linux')
 
+# 更新依赖包
 os_name, os_version,  _ = platform.dist()
 if os_name == 'centos':
     if os_version > '7.0':
-        # 更新依赖包
         subprocess.check_call('sudo yum install gcc-c++ openssl-devel sqlite-devel', shell=True)
 
 logical_cores, _ = cpu_cores()
@@ -67,3 +75,6 @@ logical_cores, _ = cpu_cores()
 subprocess.check_call('./configure --prefix=/usr', shell=True)
 subprocess.check_call('make -j{}'.format(logical_cores), shell=True)
 subprocess.check_call('sudo make install', shell=True)
+
+# 安装拓展包
+install_or_update_pip_pkgs()
