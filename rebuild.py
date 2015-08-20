@@ -26,11 +26,12 @@
 import sys
 import platform
 import subprocess
+import argparse
 
 
 def shell_output(cmd):
     '''Run a shell command and return the result string.
-    
+
     @param cmd shell command
     @return result string
     '''
@@ -52,6 +53,16 @@ def cpu_cores():
     return physical_cores, logical_cores
 
 
+def build_python_from_source(logical_cpu_cores=1):
+    '''Build python from the source code.
+
+    @param logical_cpu_cores number of CPU logical cores
+    '''
+    subprocess.check_call('./configure --prefix=/usr', shell=True)
+    subprocess.check_call('make -j{}'.format(logical_cpu_cores), shell=True)
+    subprocess.check_call('sudo make install', shell=True)
+
+
 def install_or_update_pip_pkgs():
     '''Install or update python extension packages with pip.
 
@@ -60,21 +71,46 @@ def install_or_update_pip_pkgs():
     subprocess.check_call('sudo pip3 install --upgrade pip pep8', shell=True)
 
 
-if platform.system() != 'Linux':
-    sys.exit('Only support Linux')
+if __name__ == '__main__':
+    if platform.system() != 'Linux':
+        sys.exit('Only support Linux')
 
-# 更新依赖包
-os_name, os_version,  _ = platform.dist()
-if os_name == 'centos':
-    if os_version > '7.0':
-        subprocess.check_call('sudo yum install gcc-c++ openssl-devel sqlite-devel', shell=True)
+    parser = argparse.ArgumentParser(description='Rebuild Pythn 3 environment.')
+    parser.add_argument('commands', metavar='command', type=str, nargs='+',
+                   help='a command to be executed, one of "upgrade-python", "upgrade-pip"')
+    parser.add_argument('--foo', help='foo help')
 
-logical_cores, _ = cpu_cores()
+    # 解析命令行参数
+    _upgrade_python = False
+    _upgrade_pip = False
+    args = parser.parse_args()
+    if 'upgrade-pip' in args.commands:
+        _upgrade_pip = True
+    if 'upgrade-python' in args.commands:
+        _upgrade_python = True
+        _upgrade_pip = True
 
-# 源码编译并安装
-subprocess.check_call('./configure --prefix=/usr', shell=True)
-subprocess.check_call('make -j{}'.format(logical_cores), shell=True)
-subprocess.check_call('sudo make install', shell=True)
+    # 更新依赖包
+    os_name, os_version,  _ = platform.dist()
+    if os_name == 'centos':
+        if os_version > '7.0':
+            # 更新Yum
+            subprocess.check_call('sudo yum install yum yum-utils deltarpm', shell=True)
 
-# 安装拓展包
-install_or_update_pip_pkgs()
+            # 更新核心组件
+            subprocess.check_call('sudo yum install bash bash-completion sudo python coreutils \
+                    binutils vim openssh openssh-server gcc gcc-c++ openssl-devel', shell=True)
+
+            # 更新Python依赖包
+            if _upgrade_python:
+                subprocess.check_call('sudo yum install sqlite-devel', shell=True)
+
+    
+    # 源码编译并安装
+    if _upgrade_python:
+        logical_cpu_cores, _ = cpu_cores()
+        build_python_from_source(logical_cpu_cores)
+
+    # 安装拓展包
+    if _upgrade_pip:
+        install_or_update_pip_pkgs()
