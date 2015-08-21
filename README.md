@@ -7,7 +7,7 @@ The Python Programming Language
 
 ```bash
 # CentOS 7.0
-$ sudo yum install gcc-c++ openssl-devel sqlite-devel
+$ sudo yum install gcc-c++ openssl openssl-devel sqlite-devel
 ```
 
 ### 源码编译安装
@@ -21,5 +21,5 @@ $ sudo make install
 ## 重新安装或更新
 
 ```bash
-$ sudo python3 rebuild.py
+$ sudo python3 aliyun-admin.py
 ```

@@ -15,7 +15,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-'''重建Python 3环境 (root 权限)
+'''阿里云管理脚本(root 权限)
 
 支持操作系统：
 
@@ -75,9 +75,10 @@ if __name__ == '__main__':
     if platform.system() != 'Linux':
         sys.exit('Only support Linux')
 
+    # 设置命令行参数
     parser = argparse.ArgumentParser(description='Rebuild Pythn 3 environment.')
     parser.add_argument('commands', metavar='command', type=str, nargs='+',
-                   help='a command to be executed, one of "upgrade-python", "upgrade-pip"')
+                   help='a command to be executed, one of "user", "upgrade-python", "upgrade-pip"')
     parser.add_argument('--foo', help='foo help')
 
     # 解析命令行参数
