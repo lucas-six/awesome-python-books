@@ -25,6 +25,14 @@ root All=(ALL) ALL
 %<grp> ALL=<cmd> <args ...>
 
 %mysql ALL=/sbin/service mysqld *
+
+# 查看用户登录日志（正常）
+# /var/log/wtmp
+$ last
+
+# 查看用户登录日志（异常）
+# /var/log/btmp
+$ sudo lastb
 ```
 
 ## 软件包管理
