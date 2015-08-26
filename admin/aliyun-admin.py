@@ -21,9 +21,14 @@
 
 - CentOS 7.0
 
+支持的系统常量：
+
+- CPU物理核数和逻辑核数
+- 操作系统名及版本
+
 支持的操作：
 
-- 更新Python 3环境
+- 更新（初始化）系统
 
 '''
 
@@ -31,6 +36,19 @@ import sys
 import platform
 import subprocess
 import argparse
+
+
+# CPU物理核数
+_shell_cmd_cpu_physical = 'cat /proc/cpuinfo | grep "physical id" | uniq | wc -l'
+cpu_cores_physical = int(subprocess.check_output(_shell_cmd_cpu_physical,
+        shell=True, universal_newlines=True))
+
+# CPU逻辑核数
+_shell_cmd_cpu_logical = 'cat /proc/cpuinfo| grep "processor" | uniq | wc -l'
+cpu_cores_logical = int(subprocess.check_output(_shell_cmd_cpu_logical, 
+        shell=True, universal_newlines=True))
+
+os_name, os_version,  _ = platform.dist()
 
 
 def shell_output(cmd):
@@ -42,22 +60,7 @@ def shell_output(cmd):
     return subprocess.check_output(cmd, shell=True, universal_lines=True)
 
 
-def cpu_cores():
-    '''Get the CPU cores.
-
-    @return a tuple of (physical cores, logical cores)
-    '''
-    # 查看CPU物理核数
-    #     cat /proc/cpuinfo | grep "physical id" | uniq | wc -l
-    physical_cores = int(shell_output('cat /proc/cpuinfo | grep "physical id" | uniq | wc -l'))
-
-    # 查看CPU逻辑核数
-    #     cat /proc/cpuinfo| grep "processor" | uniq | wc -l
-    logical_cores = int(shell_output('cat /proc/cpuinfo | grep "processor" | uniq | wc -l'))
-    return physical_cores, logical_cores
-
-
-def get_default_tcp_keep_alive(t=None, intvl=None, probes=None):
+def default_tcp_keep_alive(t=None, intvl=None, probes=None):
     '''配置Linux系统默认的TCP Keep-Alive。
 
     @param t tcp_keepalive_time值，如果不为None，则修改成该值；如果为None，返回当前系统默认值
@@ -118,65 +121,67 @@ def get_default_tcp_keep_alive(t=None, intvl=None, probes=None):
     return keep_alive_time, keep_alive_intvl, keep_alive_probes
 
 
-def build_python_from_source(logical_cpu_cores=1):
-    '''Build python from the source code.
-
-    @param logical_cpu_cores number of CPU logical cores
+def sys_show():
+    '''-s, --show选项.
     '''
-    subprocess.check_call('./configure --prefix=/usr', shell=True)
-    subprocess.check_call('make -j{}'.format(logical_cpu_cores), shell=True)
-    subprocess.check_call('sudo make install', shell=True)
+    print('CPU: {} physical, {} logical'.format(cpu_cores_physical, cpu_cores_logical))
+    print('OS: {}/{}'.format(os_name, os_version))
 
 
-def install_or_update_pip_pkgs():
-    '''Install or update python extension packages with pip.
-
-    $ sudo pip3 install --upgrade <python-pkg ...>
+def update_system(init=False):
+    '''更新（初始化）系统.
     '''
-    subprocess.check_call('sudo pip3 install --upgrade pip pep8', shell=True)
+    if os_name == 'centos':
+        if os_version >= '7.0':
+            # 更新Yum系统
+            subprocess.check_call('sudo yum install yum yum-utils deltarpm', shell=True)
+
+            # 更新核心组件
+            #
+            # Python依赖包：openssl, openssl-devel, sqlite-devel
+            subprocess.check_call('sudo yum install bash bash-completion sudo python coreutils \
+                    binutils vim openssh openssh-server \
+                    gcc gcc-c++ openssl openssl-devel \
+                    sqlite-devel', shell=True)
+
+            if init:
+                # 源码编译并安装Python 3
+                subprocess.check_call('./configure --prefix=/usr', shell=True)
+                subprocess.check_call('make -j{}'.format(cpu_cores_logical), shell=True)
+                subprocess.check_call('sudo make install', shell=True)
+
+            # 安装Python拓展包(pip工具)
+            #     $ sudo pip3 install --upgrade <python-pkg ...>
+            subprocess.check_call('sudo pip3 install --upgrade pip pep8 uwsgi', shell=True)
 
 
 if __name__ == '__main__':
     if platform.system() != 'Linux':
         sys.exit('Only support Linux')
 
+    valid_commands = ['sys']
+
     # 设置命令行参数
     parser = argparse.ArgumentParser(description='Administrate Aliyun ECS.')
-    parser.add_argument('commands', metavar='command', type=str, nargs='+',
-                   help='a command to be executed, one of "upgrade-python", "upgrade-pip"')
-    parser.add_argument('--foo', help='foo help')
+    parser.add_argument('commands', metavar='command', nargs='+', choices=valid_commands,
+            help='one of {}'.format(valid_commands))
+    parser.add_argument('-s', '--show', action='store_true',
+            help='[sys] show the system configuration')
+    parser.add_argument('-i', '--init', action='store_true', help='[sys] initialize the system')
+    parser.add_argument('-u', '--update', action='store_true', help='[sys] update the system')
 
     # 解析命令行参数
-    _upgrade_python = False
-    _upgrade_pip = False
     args = parser.parse_args()
-    if 'upgrade-pip' in args.commands:
-        _upgrade_pip = True
-    if 'upgrade-python' in args.commands:
-        _upgrade_python = True
-        _upgrade_pip = True
-
-    # 更新依赖包
-    os_name, os_version,  _ = platform.dist()
-    if os_name == 'centos':
-        if os_version > '7.0':
-            # 更新Yum
-            subprocess.check_call('sudo yum install yum yum-utils deltarpm', shell=True)
-
-            # 更新核心组件
-            subprocess.check_call('sudo yum install bash bash-completion sudo python coreutils \
-                    binutils vim openssh openssh-server gcc gcc-c++ openssl-devel', shell=True)
-
-            # 更新Python依赖包
-            if _upgrade_python:
-                subprocess.check_call('sudo yum install sqlite-devel', shell=True)
-
-    
-    # 源码编译并安装
-    if _upgrade_python:
-        logical_cpu_cores, _ = cpu_cores()
-        build_python_from_source(logical_cpu_cores)
-
-    # 安装拓展包
-    if _upgrade_pip:
-        install_or_update_pip_pkgs()
+    if 'sys' in args.commands:
+        # -s, --show选项
+        if args.show:
+            sys_show()
+        # -i, --init选项
+        elif args.init:
+            update_system(True)
+        # -u, --update选项
+        elif args.update:
+            update_system()
+        # 默认-s, --show选项
+        else:
+            sys_show()
