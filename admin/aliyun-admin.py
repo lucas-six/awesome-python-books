@@ -21,43 +21,16 @@
 
 - CentOS 7.0
 
-支持的系统常量：
-
-- CPU物理核数和逻辑核数
-- 操作系统名及版本
-
 支持的操作：
 
 - 更新（初始化）系统
 
 '''
 
-import sys
-import platform
 import subprocess
 import argparse
 
-
-# CPU物理核数
-_shell_cmd_cpu_physical = 'cat /proc/cpuinfo | grep "physical id" | uniq | wc -l'
-cpu_cores_physical = int(subprocess.check_output(_shell_cmd_cpu_physical,
-        shell=True, universal_newlines=True))
-
-# CPU逻辑核数
-_shell_cmd_cpu_logical = 'cat /proc/cpuinfo| grep "processor" | uniq | wc -l'
-cpu_cores_logical = int(subprocess.check_output(_shell_cmd_cpu_logical, 
-        shell=True, universal_newlines=True))
-
-os_name, os_version,  _ = platform.dist()
-
-
-def shell_output(cmd):
-    '''Run a shell command and return the result string.
-
-    @param cmd shell command
-    @return result string
-    '''
-    return subprocess.check_output(cmd, shell=True, universal_lines=True)
+import pylib
 
 
 def default_tcp_keep_alive(t=None, intvl=None, probes=None):
@@ -103,20 +76,20 @@ def default_tcp_keep_alive(t=None, intvl=None, probes=None):
     if t is not None:
         if t < 0:
             raise ValueError('net.ipv4.tcp_keepalive_time 不能设置成负数')
-        shell_output('sudo sysctl -w net.ipv4.tcp_keepalive_time={}'.format(t))
+        pylib.shell_output('sudo sysctl -w net.ipv4.tcp_keepalive_time={}'.format(t))
     if intvl is not None:
         if intvl < 0:
             raise ValueError('net.ipv4.tcp_keepalive_intvl 不能设置成负数')
-        shell_output('sudo sysctl -w net.ipv4.tcp_keepalive_intvl={}'.format(intvl))
+        pylib.shell_output('sudo sysctl -w net.ipv4.tcp_keepalive_intvl={}'.format(intvl))
     if probes is not None:
         if probes < 0:
             raise ValueError('net.ipv4.tcp_keepalive_probes 不能设置成负数')
-        shell_output('sudo sysctl -w net.ipv4.tcp_keepalive_probes={}'.format(probes))
+        pylib.shell_output('sudo sysctl -w net.ipv4.tcp_keepalive_probes={}'.format(probes))
 
     # 获取默认值
-    keep_alive_time = int(shell_output('sysctl net.ipv4.tcp_keepalive_time'))
-    keep_alive_intvl = int(shell_output('sysctl net.ipv4.tcp_keepalive_intvl'))
-    keep_alive_probes = int(shell_output('sysctl net.ipv4.tcp_keepalive_probes'))
+    keep_alive_time = int(pylib.shell_output('sysctl net.ipv4.tcp_keepalive_time'))
+    keep_alive_intvl = int(pylib.shell_output('sysctl net.ipv4.tcp_keepalive_intvl'))
+    keep_alive_probes = int(pylib.shell_output('sysctl net.ipv4.tcp_keepalive_probes'))
 
     return keep_alive_time, keep_alive_intvl, keep_alive_probes
 
@@ -124,64 +97,72 @@ def default_tcp_keep_alive(t=None, intvl=None, probes=None):
 def sys_show():
     '''-s, --show选项.
     '''
-    print('CPU: {} physical, {} logical'.format(cpu_cores_physical, cpu_cores_logical))
-    print('OS: {}/{}'.format(os_name, os_version))
+    print('CPU: {}/{} cores'.format(pylib.cpu_cores_physical, pylib.cpu_cores_logical))
+    print('OS: {}/{}'.format(pylib.os_name, pylib.os_version))
+    print('Python {}'.format(pylib.py_version))
 
 
 def update_system(init=False):
     '''更新（初始化）系统.
     '''
-    if os_name == 'centos':
-        if os_version >= '7.0':
-            # 更新Yum系统
-            subprocess.check_call('sudo yum install yum yum-utils deltarpm', shell=True)
-
+    if pylib.os_name == 'centos':
+        if pylib.os_version >= '7.0':
             # 更新核心组件
             #
             # Python依赖包：openssl, openssl-devel, sqlite-devel
-            subprocess.check_call('sudo yum install bash bash-completion sudo python coreutils \
-                    binutils vim openssh openssh-server \
-                    gcc gcc-c++ openssl openssl-devel \
-                    sqlite-devel', shell=True)
+            pylib.pkgs_install(['bash', 'bash-completion', 'sudo', 'python', 'coreutils', 
+                    'binutils', 'vim', 'openssh', 'openssh-server',
+                    'gcc', 'gcc-c++', 'openssl', 'openssl-devel',
+                    'sqlite-devel'])
 
             if init:
                 # 源码编译并安装Python 3
                 subprocess.check_call('./configure --prefix=/usr', shell=True)
-                subprocess.check_call('make -j{}'.format(cpu_cores_logical), shell=True)
+                subprocess.check_call('make -j{}'.format(pylib.cpu_cores_logical), shell=True)
                 subprocess.check_call('sudo make install', shell=True)
 
             # 安装Python拓展包(pip工具)
-            #     $ sudo pip3 install --upgrade <python-pkg ...>
-            subprocess.check_call('sudo pip3 install --upgrade pip pep8 uwsgi', shell=True)
+            pylib.pip_install(['pep8'])
+
+
+def web_uwsgi():
+    '''配置uWSGI服务.
+    '''
+    pip_install(['uwsgi'])
 
 
 if __name__ == '__main__':
-    if platform.system() != 'Linux':
-        sys.exit('Only support Linux')
-
-    valid_commands = ['sys']
+    valid_commands = ['sys', 'web']
 
     # 设置命令行参数
     parser = argparse.ArgumentParser(description='Administrate Aliyun ECS.')
-    parser.add_argument('commands', metavar='command', nargs='+', choices=valid_commands,
+    parser.add_argument('command', metavar='command', nargs=1, choices=valid_commands,
             help='one of {}'.format(valid_commands))
-    parser.add_argument('-s', '--show', action='store_true',
+    parser.add_argument('-ss', '--show', action='store_true',
             help='[sys] show the system configuration')
-    parser.add_argument('-i', '--init', action='store_true', help='[sys] initialize the system')
-    parser.add_argument('-u', '--update', action='store_true', help='[sys] update the system')
+    parser.add_argument('-si', '--init', action='store_true', help='[sys] initialize the system')
+    parser.add_argument('-su', '--update', action='store_true', help='[sys] update the system')
+    parser.add_argument('-wu', '--uwsgi', action='store_true', help='[web] configure uWSGI')
 
     # 解析命令行参数
     args = parser.parse_args()
-    if 'sys' in args.commands:
-        # -s, --show选项
+    if 'sys' in args.command:
+        # -ss, --show选项
         if args.show:
             sys_show()
-        # -i, --init选项
+        # -si, --init选项
         elif args.init:
             update_system(True)
-        # -u, --update选项
+        # -su, --update选项
         elif args.update:
             update_system()
-        # 默认-s, --show选项
+        # 默认-ss, --show选项
         else:
             sys_show()
+    if 'web' in args.command:
+        # -wu, --uwsgi选项
+        if args.uwsgi:
+            web_uwsgi()
+        # 默认-wu, --uwsgi选项
+        else:
+            web_uwsgi()
