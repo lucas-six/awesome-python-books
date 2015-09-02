@@ -192,10 +192,12 @@ def www_uwsgi(max_requests=2000, app_name='app', max_mem=512, buffer_size=4, sta
 
     # 应用配置
     if __debug__:
+        chdir = '.'
         procname_prefix = 'debug'
         pidfile_dir = '.'
         autoreload_config = 'py-autoreload = 2'
     else:
+        chdir = '/var/spool/www'
         procname_prefix = 'stable'
         pidfile_dir = '/var/run'
         autoreload_config = ''
@@ -228,12 +230,13 @@ offload-threads = %k
 max-requests = {max_requests}
 
 # 应用部署
-chdir = .
+chdir = {chdir}
 wsgi-file = {app_name}.py
 auto-procname = true
 procname-prefix-spaced = {procname_prefix}
 pidfile = {pidfile_dir}/%n.pid
 {autoreload_config}
+touch-reload = %n.ini
 
 # I/O
 limit-as = {max_mem}
@@ -249,7 +252,7 @@ cpu-affinity = 1
 no-orphans = true
 memory-report = true
 {stats_config}
-'''.format(port_config=port_config, max_requests=max_requests, app_name=app_name,
+'''.format(port_config=port_config, max_requests=max_requests, chdir=chdir, app_name=app_name,
         autoreload_config=autoreload_config, max_mem=max_mem, reload_on_as=max_mem//2,
         reload_on_rss=max_mem//4, buffer_size=buffer_size*1024, stats_config=stats_config,
         procname_prefix=procname_prefix, pidfile_dir=pidfile_dir, log_dir=log_dir)
