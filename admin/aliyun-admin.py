@@ -27,8 +27,10 @@
 
 '''
 
+import os
 import subprocess
 import argparse
+import random
 
 import pylib
 
@@ -125,14 +127,149 @@ def update_system(init=False):
             pylib.pip_install(['pep8'])
 
 
-def web_uwsgi():
-    '''配置uWSGI服务.
+def www_uwsgi(max_requests=2000, app_name='app', max_mem=512, buffer_size=4, stats=None):
+    '''配置uWSGI Web服务.
+
+    @param max_requests 最大请求数
+    @param app_name 应用名称
+    @param max_mem 最大使用内存（单位：MB）,必须是2的倍数, 默认512MB。
+    @param buffer_size 缓存大小 （单位：KB），必须是2的倍数，默认4KB。
+    @param stats 监控端口号，None为不监控
+
+    配置逻辑
+
+        循环语句
+
+            for = <x> <y> <z> ...
+            ... %(_)
+            endfor =
+
+        条件语句
+
+            环境变量是否设置
+
+                if-env = <ENV>
+                ...
+                endif =
+
+            文件是否存在
+
+                if-exists = <file>
+                ...
+                endif =
+ 
+            普通文件是否存在
+
+                if-file = <regular-file>
+                ...
+                endif =
+
+            目录是否存在
+
+                if-dir = <dir>
+                ...
+                endif =
+
+            配置选项是否存在
+
+                if-opt = <option>
+                ...
+                endif
+
+    @since uWSGI 2.0.11.1 (64bit)
     '''
-    pip_install(['uwsgi'])
+    pylib.pip_install(['uwsgi'])
+
+    # 端口绑定配置
+    #
+    # TODO
+    #'https': ':1234,x.crt,x.key',
+    #'http-socket': '127.0.0.1:1234',
+    #'https-socket': '127.0.0.1:1234,x.crt,x.key',
+    if __debug__:
+        # Debug环境下，通过HTTP Web服务
+        # 端口号为当前用户的ID加上1024
+        port = os.getuid() + pylib.max_system_port
+        port_config = 'http = :{}'.format(port)
+    else:
+        # 部署环境，采用内部通信方式，通过前段Web Server提供对外服务(nginx)
+        # 端口号在1025-9999范围内
+        port = random.randint(pylib.max_system_port+1, 9999)
+        port_config = 'socket = 127.0.0.1:{}'.format(port)
+
+    # 应用配置
+    if __debug__:
+        procname_prefix = 'debug'
+        pidfile_dir = '.'
+        autoreload_config = 'py-autoreload = 2'
+    else:
+        procname_prefix = 'stable'
+        pidfile_dir = '/var/run'
+        autoreload_config = ''
+
+    # 监控配置
+    if __debug__:
+        log_dir = '.'
+    else:
+        log_dir = '/var/log'
+    if stats is None:
+        stats_config = ''
+    else:
+        assert isinstance(stats, int)
+        stats_config = 'stats = 127.0.0.1:{}'.format(stats)
+
+    # configparser module not used, because it don't support for '%'
+    config_ini = '''# uWSGI 2.0.11.1 (64bit) 配置文件
+# 由脚本自动生成，请勿修改
+
+[uwsgi]
+{port_config}
+
+# Concurrency (并发)
+master = true
+processes = %k
+reload-mercy = 8
+threads = 2
+enable-threads = true
+offload-threads = %k
+max-requests = {max_requests}
+
+# 应用部署
+chdir = .
+wsgi-file = {app_name}.py
+auto-procname = true
+procname-prefix-spaced = {procname_prefix}
+pidfile = {pidfile_dir}/%n.pid
+{autoreload_config}
+
+# I/O
+limit-as = {max_mem}
+reload-on-as = {reload_on_as}
+reload-on-rss = {reload_on_rss}
+cache = true
+buffer-size = {buffer_size}
+
+# Monitor (系统监控)
+daemonize = {log_dir}/%n.log
+#daemonize = 127.0.0.1:4000 UDP服务器
+cpu-affinity = 1
+no-orphans = true
+memory-report = true
+{stats_config}
+'''.format(port_config=port_config, max_requests=max_requests, app_name=app_name,
+        autoreload_config=autoreload_config, max_mem=max_mem, reload_on_as=max_mem//2,
+        reload_on_rss=max_mem//4, buffer_size=buffer_size*1024, stats_config=stats_config,
+        procname_prefix=procname_prefix, pidfile_dir=pidfile_dir, log_dir=log_dir)
+
+    config_file = 'uwsgi-{}.ini'.format(app_name)
+    if not __debug__:
+        config_file = '/var/spool/www/' + config_file
+    with open(config_file, 'w') as f:
+        f.write(config_ini)
 
 
 if __name__ == '__main__':
-    valid_commands = ['sys', 'web']
+    valid_commands = ['sys', 'www']
 
     # 设置命令行参数
     parser = argparse.ArgumentParser(description='Administrate Aliyun ECS.')
@@ -142,7 +279,7 @@ if __name__ == '__main__':
             help='[sys] show the system configuration')
     parser.add_argument('-si', '--init', action='store_true', help='[sys] initialize the system')
     parser.add_argument('-su', '--update', action='store_true', help='[sys] update the system')
-    parser.add_argument('-wu', '--uwsgi', action='store_true', help='[web] configure uWSGI')
+    parser.add_argument('-wu', '--uwsgi', action='store_true', help='[www] configure uWSGI')
 
     # 解析命令行参数
     args = parser.parse_args()
@@ -159,10 +296,13 @@ if __name__ == '__main__':
         # 默认-ss, --show选项
         else:
             sys_show()
-    if 'web' in args.command:
+    if 'www' in args.command:
+        if not __debug__:
+            os.makedirs('/var/spool/www', exist_ok=True)
+
         # -wu, --uwsgi选项
         if args.uwsgi:
-            web_uwsgi()
+            www_uwsgi()
         # 默认-wu, --uwsgi选项
         else:
-            web_uwsgi()
+            www_uwsgi()

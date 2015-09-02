@@ -1,13 +1,13 @@
 *.log
+*.pid
+*.ini
+*.exe
 
 # C
 *.[oa]
 
 # Python
 *.py[co]
-
-# Windows
-*.exe
 
 # Python building files
 Makefile*

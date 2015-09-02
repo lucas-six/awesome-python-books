@@ -93,6 +93,10 @@ if os_name == 'ubuntu':
     raise NotImplementedError
 
 
+# 网络常量
+max_system_port = 1024  # 系统保留的端口号最大值
+
+
 def pkgs_install(pkgs):
     '''安装软件包 (CentOS).
 
