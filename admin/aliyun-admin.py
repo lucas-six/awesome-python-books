@@ -195,7 +195,6 @@ def www_uwsgi(app_name, max_mem, max_requests=2000, buffer_size=4, stats=None):
         sock_port_config = 'socket = 127.0.0.1:{}'.format(port)
 
     # 应用配置
-    
     if __debug__:
         app_path = os.path.join(os.path.expanduser('~'), app_name)
         procname_prefix = 'debug'
@@ -220,6 +219,15 @@ def www_uwsgi(app_name, max_mem, max_requests=2000, buffer_size=4, stats=None):
     else:
         assert isinstance(stats, int)
         stats_config = 'stats = 127.0.0.1:{}'.format(stats)
+
+    # 生成MIME文件
+    mime_file = 'mime.types'
+    if __debug__:
+        mime_file = os.path.join(app_path, mime_file)
+    else:
+        mime_file = os.path.join('/etc', mime_file)
+    with open(mime_file, 'w') as f:
+        f.write(pylib.mime_types)
 
     # configparser module not used, because it don't support for '%'
     config_ini = '''# uWSGI 2.0.11.1 (64bit) 配置文件
@@ -246,13 +254,17 @@ procname-prefix-spaced = {procname_prefix}
 pidfile = {pidfile_dir}/%n.pid
 vacuum = true
 if-opt = http
+mimefile = {app_path}/mime.types
 static-check = {app_path}/static
 static-map = /image={app_path}/static/image/
 static-map = /css={app_path}/static/css/
 static-map = /js={app_path}/static/js/
 static-index = index.html
-static-gzip-ext = txt html css
+static-gzip-ext = txt html css js
 py-autoreload = 2
+endif =
+if-opt = socket
+mimefile = /etc/mime.types
 endif =
 touch-reload = {app_path}/%n.ini
 
