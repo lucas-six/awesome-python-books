@@ -260,7 +260,7 @@ static-map = /image={app_path}/static/image/
 static-map = /css={app_path}/static/css/
 static-map = /js={app_path}/static/js/
 static-index = index.html
-static-gzip-ext = txt html css js
+static-gzip-ext = txt html css js xml
 py-autoreload = 2
 endif =
 if-opt = socket

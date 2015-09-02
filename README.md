@@ -34,7 +34,7 @@ $ sudo python3 -O aliyun-admin.py sys --update
 
 ```bash
 # 配置uWSGI Web服务(调试)
-$ python3 aliyun-admin.py www --uwsgi
+$ python3 aliyun-admin.py www --uwsgi 应用名称 最大内存
 
 # 启动uWSGI服务（调试）
 $ uwsgi uwsgii-app.ini
