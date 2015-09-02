@@ -26,18 +26,14 @@
 
 包含：
 
-- cpu_cores_physical
-- cpu_cores_logical
-- supported_os
-- os_name
-- os_version
-- py_version
-- max_system_port
+- CPU核数（物理和逻辑）
+- 操作系统名称及版本
+- Python版本
+- 系统保留的最大端口号
 
-- shell()
-- shell_output()
-- pkgs_install()
-- pip_install()
+- 执行shell命令
+- 安装软件包
+- 安装Python拓展包
 '''
 
 import sys
