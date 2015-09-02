@@ -78,7 +78,7 @@ _cmd_cpu_physical = 'cat /proc/cpuinfo | grep "physical id" | uniq | wc -l'
 cpu_cores_physical = int(shell_output(_cmd_cpu_physical, '1'))
 
 # CPU逻辑核数
-_cmd_cpu_logical = 'cat /proc/cpuinfo| grep "processor" | uniq | wc -l'
+_cmd_cpu_logical = 'cat /proc/cpuinfo | grep "processor" | uniq | wc -l'
 cpu_cores_logical = int(shell_output(_cmd_cpu_logical, '1'))
 
 

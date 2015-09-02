@@ -122,12 +122,12 @@ def update_system():
             pylib.pip_install(['pep8'])
 
 
-def www_uwsgi(max_requests=2000, app_name='app', max_mem=512, buffer_size=4, stats=None):
+def www_uwsgi(app_name, max_mem, max_requests=2000, buffer_size=4, stats=None):
     '''配置uWSGI Web服务.
 
-    @param max_requests 最大请求数
     @param app_name 应用名称
-    @param max_mem 最大使用内存（单位：MB）,必须是2的倍数, 默认512MB。
+    @param max_mem 最大使用内存（单位：MB）,必须是2的倍数
+    @param max_requests 最大请求数
     @param buffer_size 缓存大小 （单位：KB），必须是2的倍数，默认4KB。
     @param stats 监控端口号，None为不监控
 
@@ -274,30 +274,31 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Administrate Aliyun ECS.')
     parser.add_argument('command', metavar='command', nargs=1, choices=valid_commands,
             help='one of {}'.format(valid_commands))
-    parser.add_argument('-ss', '--show', action='store_true',
+    parser.add_argument('-s', '--show', action='store_true',
             help='[sys] show the system configuration')
-    parser.add_argument('-su', '--update', action='store_true', help='[sys] update the system')
-    parser.add_argument('-wu', '--uwsgi', action='store_true', help='[www] configure uWSGI')
+    parser.add_argument('-u', '--update', action='store_true', help='[sys] update the system')
+    parser.add_argument('--uwsgi', nargs=2, metavar=('APP_NAME', 'MAX_MEM'),
+            help='[www] configure uWSGI')
 
     # 解析命令行参数
     args = parser.parse_args()
     if 'sys' in args.command:
-        # -ss, --show选项
+        # -s, --show选项
         if args.show:
             sys_show()
-        # -su, --update选项
+        # -u, --update选项
         elif args.update:
             update_system()
-        # 默认-ss, --show选项
         else:
-            sys_show()
+            parser.print_help()
     if 'www' in args.command:
         if not __debug__:
             os.makedirs('/var/spool/www', exist_ok=True)
 
-        # -wu, --uwsgi选项
-        if args.uwsgi:
-            www_uwsgi()
-        # 默认-wu, --uwsgi选项
+        # --uwsgi选项
+        if args.uwsgi is not None and len(args.uwsgi):
+            app_name = args.uwsgi[0]
+            max_mem = int(args.uwsgi[1])
+            www_uwsgi(app_name=app_name, max_mem=max_mem)
         else:
-            www_uwsgi()
+            parser.print_help()
