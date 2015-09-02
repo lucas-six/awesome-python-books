@@ -114,7 +114,7 @@ def update_system():
             #
             # Python依赖包：openssl, openssl-devel, sqlite-devel
             pylib.pkgs_install(['bash', 'bash-completion', 'sudo', 'python', 'coreutils', 
-                    'binutils', 'vim', 'openssh', 'openssh-server',
+                    'binutils', 'vim', 'openssh', 'openssh-server', 'gzip',
                     'gcc', 'gcc-c++', 'openssl', 'openssl-devel',
                     'sqlite-devel'])
 
@@ -251,6 +251,7 @@ static-map = /image={app_path}/static/image/
 static-map = /css={app_path}/static/css/
 static-map = /js={app_path}/static/js/
 static-index = index.html
+static-gzip-ext = txt html css
 py-autoreload = 2
 endif =
 touch-reload = {app_path}/%n.ini
