@@ -226,8 +226,7 @@ class TCPRequestHandler(BaseRequestHandler):
 
     def setup(self):
         if self.disable_nagle_algorithm:
-            self.request.setsockopt(socket.IPPROTO_TCP,
-                                       socket.TCP_NODELAY, True)
+            self.request.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, True)
 
     def handle(self):
         pass
@@ -552,17 +551,20 @@ class HTTPServer(TCPServer):
     '''HTTP/1.1 server (Only supported for IPv4).
     '''
 
-    def __init__(self, address, request_handler=TCPRequestHandler, timeout=None, ipv4only=True):
-        '''Create an instance of TCP server.
+    # HTTP/1.1默认支持KeepAlive
+    enable_keep_alive = True
 
-    @param address server address, 2-tuple (host, port). An host of '' or port
-                   0 tells the OS to use the default.
-    @param request_handler request handler class
-    @param timeout timeout of socket object. None for blocking, 0.0 for
-                   non-blocking, others for timeout in seconds (float)
-    @param ipv4only True for IPv4 only, False for both IPv6/IPv4.
-    @exception OSError <code>socket</code> error
-    '''
+    def __init__(self, address, request_handler=TCPRequestHandler, timeout=None, ipv4only=True):
+        '''Create an instance of HTTP/1.1 server.
+
+        @param address server address, 2-tuple (host, port). An host of '' or port
+                       0 tells the OS to use the default.
+        @param request_handler request handler class
+        @param timeout timeout of socket object. None for blocking, 0.0 for
+                       non-blocking, others for timeout in seconds (float)
+        @param ipv4only True for IPv4 only, False for both IPv6/IPv4.
+        @exception OSError <code>socket</code> error
+        '''
         super(HTTPServer, self).__init__(address, request_handler, timeout, ipv4only)
         self.fqdn = self._sock.getfqdn(self.server_address[0])
 
@@ -570,19 +572,19 @@ class HTTPServer(TCPServer):
 class HTTPRequestHandler(TCPRequestHandler):
     '''HTTP request handler.
     '''
-    
-    http_version = 'HTTP/1.1'
+
+    HTTP_VERSION = 'HTTP/1.1'
 
     # 服务器可处理的最大实体数据大小
-    max_body_len = 65537
+    MAX_BODY_LEN = 65537
 
     # 服务器可处理的URL最长长度
-    max_url_len = 10240
+    MAX_URL_LEN = 10240
 
     # Table mapping response codes to messages; entries have the
     # form {code: (shortmessage, longmessage)}.
     # See RFC 2616 and 6585.
-    responses = {
+    RESPONSES = {
         100: ('Continue', 'Request received, please continue'),
         101: ('Switching Protocols',
               'Switching to new protocol; obey Upgrade header'),
@@ -656,14 +658,46 @@ class HTTPRequestHandler(TCPRequestHandler):
               'The client needs to authenticate to gain network access.'),
         }
 
+    WEEK_DAY_NAME = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
+
+    MONTH_NAME = (None,
+                 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
+
+    # The server software version.  You may want to override this.
+    # The format is multiple whitespace-separated strings,
+    # where each string is of the form name[/version].
+    server_version = "BaseHTTP/" + __version__
+
+    error_content_type = "text/html; charset=utf-8"
+
+    # HTML5
+    error_message_template = """\
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Error Response</title>
+  </head>
+  <body>
+    <h1>Error Response</h1>
+    <p>Error: {} {}: {}</p>
+  </body>
+</html>
+"""
+
+    def setup(self):
+        super(HTTPRequestHandler, self).setup()
+        self.request_line = ''
+        self.command = ''
+        self._headers = []
+
     def handle(self):
         client_address = self.request.getsockname()
         try:
             data = self.request.recv(max_body_len)
             if len(data) > max_body_len - 1:
-                self.request_line = ''
-                self.command = ''
-                self._send_error(413)
+                self.send_error(413)
                 pass # 413
             if __debug__:
                 print('HTTP data from {0}: {1}'.format(client_address, data), file=sys.stderr)
@@ -675,6 +709,63 @@ class HTTPRequestHandler(TCPRequestHandler):
             print('Data R/W error {}:'.format(err), file=sys.stderr)
             raise
 
-    def _send_error(code):
+    def send_response(self, code):
+        '''Add the response header to the headers buffer and log the response
+        code.
+
+        Also send two standard headers with the server software version and
+        the current date.
+
+        @param code HTTP status code
+        '''
+        message, explain = self.RESPONSES[code]
         if __debug__:
-            print('code={}, message="{}"'.format(code, responses[code][1]))
+            print('code={}, message="{}", explain="{}"'.format(code, message, explain),
+                    file=sys.stderr)
+        self._send_response_header_only(code, message)
+        self._send_mime_header('Server', '')
+        now = time.time()
+        year, month, day, hh, mm, ss, wd, y, z = time.gmtime(now)
+        date_str = "{0}, {1:02} {2} {3} {4:02}:{5:02}:{6:02} GMT"
+                .format(self.WEEK_DAY_NAME[wd], day, self.MONTH_NAME[month], year, hh, mm, ss)
+        self._send_mime_header('Date', date_str)
+
+    def send_error(self, code):
+        '''Send HTTP error response.
+
+        @param code HTTP error status code
+        '''
+        content = (self.error_message_template
+                .format(code, self._quote_html(self.message), self._quote_html(self.explain)))
+        body = content.encode()
+        self._send_response_header_only(code)
+
+    def _send_response_header_only(self, code, message):
+        '''Send HTTP response header only.
+
+        @param code HTTP status code
+        @param message HTTP status message
+        '''
+        header_str = '{} {} {}'.format(self.http_version, code, message)
+        self._append_header(header_str)
+
+    def _send_mime_header(self, key, value):
+        '''Send a MIME header.
+
+        @param key header kwyword
+        @param value header value
+        '''
+        header_str = '{}: {}'.format(key, value)
+        self._append_header(header_str)
+
+    def _append_header(self, header_str):
+        '''Append header string to header buffer.
+
+        @param header_str header string
+        '''
+        header_byte = ''.join(header_str, '\r\n').encode()
+        self._headers.append(header_byte)
+
+    @staticmethod
+    def _quote_html(html):
+        return html.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
