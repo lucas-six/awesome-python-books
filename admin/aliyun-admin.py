@@ -28,7 +28,6 @@
 '''
 
 import os
-import subprocess
 import argparse
 import random
 
@@ -104,8 +103,8 @@ def sys_show():
     print('Python {}'.format(pylib.py_version))
 
 
-def update_system(init=False):
-    '''更新（初始化）系统.
+def update_system():
+    '''更新系统.
     '''
     if pylib.os_name == 'centos':
         if pylib.os_version >= '7.0':
@@ -116,12 +115,6 @@ def update_system(init=False):
                     'binutils', 'vim', 'openssh', 'openssh-server',
                     'gcc', 'gcc-c++', 'openssl', 'openssl-devel',
                     'sqlite-devel'])
-
-            if init:
-                # 源码编译并安装Python 3
-                subprocess.check_call('./configure --prefix=/usr', shell=True)
-                subprocess.check_call('make -j{}'.format(pylib.cpu_cores_logical), shell=True)
-                subprocess.check_call('sudo make install', shell=True)
 
             # 安装Python拓展包(pip工具)
             pylib.pip_install(['pep8'])
@@ -277,7 +270,6 @@ if __name__ == '__main__':
             help='one of {}'.format(valid_commands))
     parser.add_argument('-ss', '--show', action='store_true',
             help='[sys] show the system configuration')
-    parser.add_argument('-si', '--init', action='store_true', help='[sys] initialize the system')
     parser.add_argument('-su', '--update', action='store_true', help='[sys] update the system')
     parser.add_argument('-wu', '--uwsgi', action='store_true', help='[www] configure uWSGI')
 
@@ -287,9 +279,6 @@ if __name__ == '__main__':
         # -ss, --show选项
         if args.show:
             sys_show()
-        # -si, --init选项
-        elif args.init:
-            update_system(True)
         # -su, --update选项
         elif args.update:
             update_system()

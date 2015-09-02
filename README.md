@@ -14,12 +14,7 @@ $ sudo yum install gcc-c++ openssl openssl-devel sqlite-devel
 
 ```bash
 $ ./configure --prefix=/usr
-$ make
+$ make -j4  ## 4 为CPU核数
 $ sudo make install
 ```
 
-## 重新安装或更新
-
-```bash
-$ sudo python3 aliyun-admin.py
-```
