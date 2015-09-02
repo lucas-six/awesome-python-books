@@ -32,8 +32,12 @@
 - os_name
 - os_version
 - py_version
+- max_system_port
 
+- shell()
 - shell_output()
+- pkgs_install()
+- pip_install()
 '''
 
 import sys
