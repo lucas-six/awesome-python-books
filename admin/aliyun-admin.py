@@ -237,6 +237,7 @@ wsgi-file = {app_name}.py
 auto-procname = true
 procname-prefix-spaced = {procname_prefix}
 pidfile = {pidfile_dir}/%n.pid
+vacuum = true
 {autoreload_config}
 touch-reload = %n.ini
 
