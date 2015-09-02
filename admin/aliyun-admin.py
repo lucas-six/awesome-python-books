@@ -185,28 +185,34 @@ def www_uwsgi(app_name, max_mem, max_requests=2000, buffer_size=4, stats=None):
         # Debug环境下，通过HTTP Web服务
         # 端口号为当前用户的ID加上1024
         port = os.getuid() + pylib.max_system_port
-        port_config = 'http = :{}'.format(port)
+        http_port_config = 'http = :{}'.format(port)
+        sock_port_config = ''
     else:
         # 部署环境，采用内部通信方式，通过前段Web Server提供对外服务(nginx)
         # 端口号在1025-9999范围内
         port = random.randint(pylib.max_system_port+1, 9999)
-        port_config = 'socket = 127.0.0.1:{}'.format(port)
+        http_port_config = ''
+        sock_port_config = 'socket = 127.0.0.1:{}'.format(port)
 
     # 应用配置
+    
     if __debug__:
-        chdir = '.'
+        app_path = os.path.join(os.path.expanduser('~'), app_name)
         procname_prefix = 'debug'
-        pidfile_dir = '.'
-        autoreload_config = 'py-autoreload = 2'
+        pidfile_dir = app_path
     else:
-        chdir = '/var/spool/www'
+        app_path = os.path.join('/var/spool/www', app_name)
         procname_prefix = 'stable'
         pidfile_dir = '/var/run'
-        autoreload_config = ''
+    os.makedirs(app_path, exist_ok=True)
+    static_path = os.path.join(app_path, 'static')
+    os.makedirs(static_path, exist_ok=True)
+    for subdir in ('image', 'css', 'js'):
+        os.makedirs(os.path.join(static_path, subdir), exist_ok=True)
 
     # 监控配置
     if __debug__:
-        log_dir = '.'
+        log_dir = app_path
     else:
         log_dir = '/var/log'
     if stats is None:
@@ -220,7 +226,8 @@ def www_uwsgi(app_name, max_mem, max_requests=2000, buffer_size=4, stats=None):
 # 由脚本自动生成，请勿修改
 
 [uwsgi]
-{port_config}
+{http_port_config}
+{sock_port_config}
 
 # Concurrency (并发)
 master = true
@@ -232,14 +239,21 @@ offload-threads = %k
 max-requests = {max_requests}
 
 # 应用部署
-chdir = {chdir}
+chdir = {app_path}
 wsgi-file = {app_name}.py
 auto-procname = true
 procname-prefix-spaced = {procname_prefix}
 pidfile = {pidfile_dir}/%n.pid
 vacuum = true
-{autoreload_config}
-touch-reload = %n.ini
+if-opt = http
+static-check = {app_path}/static
+static-map = /image={app_path}/static/image/
+static-map = /css={app_path}/static/css/
+static-map = /js={app_path}/static/js/
+static-index = index.html
+py-autoreload = 2
+endif =
+touch-reload = {app_path}/%n.ini
 
 # I/O
 limit-as = {max_mem}
@@ -255,17 +269,31 @@ cpu-affinity = 1
 no-orphans = true
 memory-report = true
 {stats_config}
-'''.format(port_config=port_config, max_requests=max_requests, chdir=chdir, app_name=app_name,
-        autoreload_config=autoreload_config, max_mem=max_mem, reload_on_as=max_mem//2,
-        reload_on_rss=max_mem//4, buffer_size=buffer_size*1024, stats_config=stats_config,
-        procname_prefix=procname_prefix, pidfile_dir=pidfile_dir, log_dir=log_dir)
+'''.format(http_port_config=http_port_config, sock_port_config=sock_port_config,
+        max_requests=max_requests, app_path=app_path, app_name=app_name,
+        max_mem=max_mem, reload_on_as=max_mem//2, reload_on_rss=max_mem//4,
+        buffer_size=buffer_size*1024, stats_config=stats_config, procname_prefix=procname_prefix,
+        pidfile_dir=pidfile_dir, log_dir=log_dir)
 
     config_file = 'uwsgi-{}.ini'.format(app_name)
-    if not __debug__:
+    if __debug__:
+        config_file = os.path.join(app_path, config_file)
+    else:
         config_file = '/var/spool/www/' + config_file
     with open(config_file, 'w') as f:
         f.write(config_ini)
 
+    # 生成默认App文件
+    app_file = '''#!/usr/bin/env python3
+
+# 此文件由脚本自动生成，可替换成自定义的Web应用
+
+def application(env, start_response):
+    start_response('200 OK', [('Content-Type','text/plain; charset=utf-8')])
+    return [b"Hello World"]
+'''
+    with open(os.path.join(app_path, '{}.py'.format(app_name)), 'w') as f:
+        f.write(app_file)
 
 if __name__ == '__main__':
     valid_commands = ['sys', 'www']
