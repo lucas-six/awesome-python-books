@@ -16,39 +16,17 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-'''Database - SQLite3, MySQL
+'''Database - MySQL
 
 Including:
 
-- 自定义SQLite3连接上下文管理器
 - 自定义MySQL连接上下文管理器
 
 @since Python 3.4.3
 '''
 
 from contextlib import contextmanager
-import sqlite3
 import mysql
-
-
-@contextmanager
-def sqlite3_connection(path):
-    '''自定义SQLite3连接上下文管理器
-
-    @param path path to the SQLite3 database file
-    '''
-    conn = None
-    try:
-        conn = sqlite3.connect(path)
-        yield conn
-    except Exception as e :
-        if conn is not None:
-            conn.rollback()
-        raise
-    finally:
-        if conn is not None:
-            conn.commit()
-            conn.close()
 
 
 @contextmanager
@@ -82,4 +60,4 @@ def mysql_connection(host, port=3306, db_name='', charset='utf-8', user_name='',
     finally:
         if conn is not None:
             conn.commit()
-            conn.close(
+            conn.close()

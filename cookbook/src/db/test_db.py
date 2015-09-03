@@ -16,42 +16,15 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-'''测试数据库 - SQLite3, MySQL
+'''测试数据库 - MySQL
 
 '''
 
 import sys
-import sqlite3
 
 import mysql
 
 import db
-
-
-def test_sqlite3(func, sqlite_file):
-    '''测试用例：SQLite3数据库操作
-    '''
-    uid = '123'
-    user_name = 'user name'
-
-    try:
-        with func(sqlite_file) as conn:
-            # 创建表
-            conn.execute('CREATE TABLE user(user_id varchar(36), user_name varchar(128))')
-
-            # 新增数据
-            conn.execute('INSERT INTO user VALUES(?, ?)', (uid, user_name))
-
-            # 查询数据
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM user')
-            result = cursor.fetchall()
-            print(result)
-            
-            # 删除数据
-            conn.execute('DELETE FROM user WHERE user_id=?', (uid,))
-    except sqlite3.OperationalError as err:
-        print(err, file=sys.stderr)
 
 
 def test_mysql(func, **args):
@@ -81,12 +54,6 @@ def test_mysql(func, **args):
 
 
 if __name__ == '__main__':
-    # SQLite3
-    test_sqlite3(sqlite3.connect, '/not-exists')            # 标准库
-    test_sqlite3(sqlite3.connect, 'test-std.sqlite3')       # 标准库
-    test_sqlite3(db.sqlite3_connection, '/not-exists')      # 自定义
-    test_sqlite3(db.sqlite3_connection, 'test-db.sqlite3')  # 自定义
-
     # MySQL
     #arg = ('localhost', 3306, 'test_db', 'admin', '111111')
     #test_mysql(mysql.connector.connect, *arg)
