@@ -229,6 +229,13 @@ def www_uwsgi(app_name, max_mem, max_requests=2000, buffer_size=4, stats=None):
     with open(mime_file, 'w') as f:
         f.write(pylib.mime_types)
 
+    # 生成默认主页
+    home_page = '''<!DOCTYPE html>
+<html><head><title>uWSGI Test</title></head><body><h1>uWSGI Test</h1></body></html>
+'''
+    with open(os.path.join(static_path, 'index.html'), 'w') as f:
+        f.write(home_page)
+
     # configparser module not used, because it don't support for '%'
     config_ini = '''# uWSGI 2.0.11.1 (64bit) 配置文件
 # 由脚本自动生成，请勿修改
