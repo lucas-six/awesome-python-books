@@ -20,7 +20,3 @@ $ last
 # /var/log/btmp
 $ sudo lastb
 ```
-
-## 软件包管理
-
-
