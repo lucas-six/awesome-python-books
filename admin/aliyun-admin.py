@@ -25,7 +25,6 @@
 
 - 显示系统信息
 - 更新系统
-- 配置uWSGI Web服务
 
 '''
 
@@ -121,162 +120,8 @@ def update_system():
             # 安装Python拓展包(pip工具)
             pylib.pip_install(['pep8'])
 
-
-def www_uwsgi(app_name, max_mem, max_requests=2000, buffer_size=4, stats=None):
-    '''配置uWSGI Web服务.
-
-    @param app_name 应用名称
-    @param max_mem 最大使用内存（单位：MB）,必须是2的倍数
-    @param max_requests 最大请求数
-    @param buffer_size 缓存大小 （单位：KB），必须是2的倍数，默认4KB。
-    @param stats 监控端口号，None为不监控
-
-    @since uWSGI 2.0.11.1 (64bit)
-    '''
-    pylib.pip_install(['uwsgi'])
-
-    # 端口绑定配置
-    #
-    # TODO
-    #'https': ':1234,x.crt,x.key',
-    #'http-socket': '127.0.0.1:1234',
-    #'https-socket': '127.0.0.1:1234,x.crt,x.key',
-    if __debug__:
-        # Debug环境下，通过HTTP Web服务
-        # 端口号为当前用户的ID加上1024
-        port = os.getuid() + pylib.max_system_port
-        http_port_config = 'http = :{}'.format(port)
-        sock_port_config = ''
-    else:
-        # 部署环境，采用内部通信方式，通过前段Web Server提供对外服务(nginx)
-        # 端口号在1025-9999范围内
-        port = random.randint(pylib.max_system_port+1, 9999)
-        http_port_config = ''
-        sock_port_config = 'socket = 127.0.0.1:{}'.format(port)
-
-    # 应用配置
-    if __debug__:
-        app_path = os.path.join(os.path.expanduser('~'), app_name)
-        procname_prefix = 'debug'
-        pidfile_dir = app_path
-    else:
-        app_path = os.path.join('/var/spool/www', app_name)
-        procname_prefix = 'stable'
-        pidfile_dir = '/var/run'
-    os.makedirs(app_path, exist_ok=True)
-    static_path = os.path.join(app_path, 'static')
-    os.makedirs(static_path, exist_ok=True)
-    for subdir in ('image', 'css', 'js'):
-        os.makedirs(os.path.join(static_path, subdir), exist_ok=True)
-
-    # 监控配置
-    if __debug__:
-        log_dir = app_path
-    else:
-        log_dir = '/var/log'
-    if stats is None:
-        stats_config = ''
-    else:
-        assert isinstance(stats, int)
-        stats_config = 'stats = 127.0.0.1:{}'.format(stats)
-
-    # 生成MIME文件
-    mime_file = 'mime.types'
-    if __debug__:
-        mime_file = os.path.join(app_path, mime_file)
-    else:
-        mime_file = os.path.join('/etc', mime_file)
-    with open(mime_file, 'w') as f:
-        f.write(pylib.mime_types)
-
-    # 生成默认主页
-    home_page = '''<!DOCTYPE html>
-<html><head><title>uWSGI Test</title></head><body><h1>uWSGI Test</h1></body></html>
-'''
-    with open(os.path.join(static_path, 'index.html'), 'w') as f:
-        f.write(home_page)
-
-    # configparser module not used, because it don't support for '%'
-    config_ini = '''# uWSGI 2.0.11.1 (64bit) 配置文件
-# 由脚本自动生成，请勿修改
-
-[uwsgi]
-{http_port_config}
-{sock_port_config}
-
-# Concurrency (并发)
-master = true
-processes = %k
-reload-mercy = 8
-threads = 2
-enable-threads = true
-offload-threads = %k
-max-requests = {max_requests}
-
-# 应用部署
-chdir = {app_path}
-wsgi-file = {app_name}.py
-auto-procname = true
-procname-prefix-spaced = {procname_prefix}
-pidfile = {pidfile_dir}/%n.pid
-vacuum = true
-if-opt = http
-mimefile = {app_path}/mime.types
-static-check = {app_path}/static
-static-map = /image={app_path}/static/image/
-static-map = /css={app_path}/static/css/
-static-map = /js={app_path}/static/js/
-static-index = index.html
-static-gzip-ext = txt html css js xml
-py-autoreload = 2
-endif =
-if-opt = socket
-mimefile = /etc/mime.types
-endif =
-touch-reload = {app_path}/%n.ini
-
-# I/O
-limit-as = {max_mem}
-reload-on-as = {reload_on_as}
-reload-on-rss = {reload_on_rss}
-cache = true
-buffer-size = {buffer_size}
-
-# Monitor (系统监控)
-daemonize = {log_dir}/%n.log
-#daemonize = 127.0.0.1:4000 UDP服务器
-cpu-affinity = 1
-no-orphans = true
-memory-report = true
-{stats_config}
-'''.format(http_port_config=http_port_config, sock_port_config=sock_port_config,
-        max_requests=max_requests, app_path=app_path, app_name=app_name,
-        max_mem=max_mem, reload_on_as=max_mem//2, reload_on_rss=max_mem//4,
-        buffer_size=buffer_size*1024, stats_config=stats_config, procname_prefix=procname_prefix,
-        pidfile_dir=pidfile_dir, log_dir=log_dir)
-
-    config_file = 'uwsgi-{}.ini'.format(app_name)
-    if __debug__:
-        config_file = os.path.join(app_path, config_file)
-    else:
-        config_file = '/var/spool/www/' + config_file
-    with open(config_file, 'w') as f:
-        f.write(config_ini)
-
-    # 生成默认App文件
-    app_file = '''#!/usr/bin/env python3
-
-# 此文件由脚本自动生成，可替换成自定义的Web应用
-
-def application(env, start_response):
-    start_response('200 OK', [('Content-Type','text/plain; charset=utf-8')])
-    return [b"Hello World"]
-'''
-    with open(os.path.join(app_path, '{}.py'.format(app_name)), 'w') as f:
-        f.write(app_file)
-
 if __name__ == '__main__':
-    valid_commands = ['sys', 'www']
+    valid_commands = ['sys']
 
     # 设置命令行参数
     parser = argparse.ArgumentParser(description='Administrate Aliyun ECS.')
@@ -285,8 +130,6 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--show', action='store_true',
             help='[sys] show the system configuration')
     parser.add_argument('-u', '--update', action='store_true', help='[sys] update the system')
-    parser.add_argument('--uwsgi', nargs=2, metavar=('APP_NAME', 'MAX_MEM'),
-            help='[www] configure uWSGI')
 
     # 解析命令行参数
     args = parser.parse_args()
@@ -297,16 +140,5 @@ if __name__ == '__main__':
         # -u, --update选项
         elif args.update:
             update_system()
-        else:
-            parser.print_help()
-    if 'www' in args.command:
-        if not __debug__:
-            os.makedirs('/var/spool/www', exist_ok=True)
-
-        # --uwsgi选项
-        if args.uwsgi is not None and len(args.uwsgi):
-            app_name = args.uwsgi[0]
-            max_mem = int(args.uwsgi[1])
-            www_uwsgi(app_name=app_name, max_mem=max_mem)
         else:
             parser.print_help()
