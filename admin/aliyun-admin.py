@@ -131,46 +131,6 @@ def www_uwsgi(app_name, max_mem, max_requests=2000, buffer_size=4, stats=None):
     @param buffer_size 缓存大小 （单位：KB），必须是2的倍数，默认4KB。
     @param stats 监控端口号，None为不监控
 
-    配置逻辑
-
-        循环语句
-
-            for = <x> <y> <z> ...
-            ... %(_)
-            endfor =
-
-        条件语句
-
-            环境变量是否设置
-
-                if-env = <ENV>
-                ...
-                endif =
-
-            文件是否存在
-
-                if-exists = <file>
-                ...
-                endif =
- 
-            普通文件是否存在
-
-                if-file = <regular-file>
-                ...
-                endif =
-
-            目录是否存在
-
-                if-dir = <dir>
-                ...
-                endif =
-
-            配置选项是否存在
-
-                if-opt = <option>
-                ...
-                endif
-
     @since uWSGI 2.0.11.1 (64bit)
     '''
     pylib.pip_install(['uwsgi'])
