@@ -21,4 +21,4 @@
 
 ## License
 
-[MIT License](https://github.com/leven-cn/awesome-python-books/blob/main/LICENSE)
+[BSD 3-Clause License](https://github.com/leven-cn/awesome-python-books/blob/main/LICENSE)
