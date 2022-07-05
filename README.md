@@ -1,51 +1,24 @@
-# python
-The Python Programming Language
+# Awesome Python Books [![Awesome](https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg)](https://github.com/sindresorhus/awesome)
 
-## 安装
+<section align="center">
+  <img src="https://raw.githubusercontent.com/leven-cn/python-cookbook/main/.python-logo.png"
+    alt="Python Logo" width="200" height="200" title="Python Logo">
+  <br><br>
+  <p>
+    <a href="https://github.com/sindresorhus/awesome">
+        <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg"
+      alt="awesome" style="max-width:100%;">
+    </a>
+    <a href="https://github.com/pre-commit/pre-commit">
+        <img src="https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white"
+      alt="pre-commit" style="max-width:100%;">
+    </a>
+  </p>
+  <p><a href="https://leven-cn.github.io/awesome-python-books/">Awesome books</a> for <code>Python 3</code></p>
+</section>
 
-### 安装依赖包
+## Books
 
-```bash
-# CentOS 7.0
-$ sudo yum install gcc-c++ openssl openssl-devel sqlite-devel
-```
+## License
 
-### 源码编译安装
-
-```bash
-$ ./configure --prefix=/usr
-$ make -j4  ## 4 为CPU核数
-$ sudo make install
-```
-
-## 阿里云管理脚本
-
-```bash
-cd admin
-
-# 查看系统信息
-$ python3 -O aliyun-admin.py sys --show
-
-# 更新系统
-$ sudo python3 -O aliyun-admin.py sys --update
-```
-
-### uWSGI服务
-
-```bash
-# 配置uWSGI Web服务(调试)
-$ python3 aliyun-admin.py www --uwsgi 应用名称 最大内存
-
-# 启动uWSGI服务（调试）
-$ uwsgi uwsgii-app.ini
-
-# 停止uWSGI服务（调试）
-$ uwsgi --stop uwsgi-app.pid
-
-# 重启uWSGI服务（调试）
-$ uwsgi --reload uwsgi-app.pid
-
-# 查看uWSGI日志（调试）
-$ tail -f uwsgi-app.log
-```
-
+[MIT License](https://github.com/leven-cn/awesome-python-books/blob/main/LICENSE)
