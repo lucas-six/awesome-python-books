@@ -2,31 +2,4 @@
 *.pid
 *.ini
 *.exe
-
-# C
-*.[oa]
-
-# Python
-*.py[co]
-
-# Python building files
-Makefile*
-pyconfig.h
-config.status
-Misc/python-config.sh
-Misc/python.pc
-Modules/Setup
-Modules/Setup.config
-Modules/Setup.local
-Modules/config.c
-Modules/ld_so_aix
-Modules/_testembed
-Parser/pgen
-pybuilddir.txt
-python-config
-python-config.py
-python.exe-gdb.py
-python
-python-gdb.py
-build/
-
+.DS_Store
