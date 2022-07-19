@@ -42,6 +42,7 @@
 - Wesley Chun. *Core Python Application Programming, 3rd Edition* (2012) ISBN: 978-7-115-41477-9 (《Python核心编程（第3版）》)
 - David Beazley & Jones, B.K. *Python Cookbook, 3rd Edition* (2015) ISBN: 978-7-115-41477-9 ([中文版](https://python3-cookbook.readthedocs.io/zh_CN/latest/))
 - Doug Hellmann. *The Python 3 Standard Library by Example* (2017) ISBN: 978-0-134-29105-5 (《Python 3 标准库》)
+- Kenneth Reitz & Tanya Schlusser. *The Hitchhiker’s Guide to Python!: Best Practices for Development* ISBN: 978-1-491-93317-6 ([Online Edition](https://docs.python-guide.org))
 
 ### Online
 
