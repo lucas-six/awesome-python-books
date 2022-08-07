@@ -44,6 +44,7 @@
 - Doug Hellmann. *The Python 3 Standard Library by Example* (2017) ISBN: 978-0-134-29105-5 (《Python 3 标准库》)
 - Kenneth Reitz & Tanya Schlusser. *The Hitchhiker’s Guide to Python!: Best Practices for Development* ISBN: 978-1-491-93317-6 ([Online Edition](https://docs.python-guide.org))
 - *Test Driven Development - By Examples* (2002)
+- David Gourley & Brian Totty. *HTTP: The Definitive Guide* (2002) ISBN: 978-1-56592-509-0 (《HTTP权威指南》)
 
 ### Online
 
